@@ -57,6 +57,10 @@ The command specification lives in `.claude/commands/mssql-to-postgres.md`. It d
 - **Columnstore indexes**: No PostgreSQL equivalent — omit with a comment.
 - **Extended properties** (`sp_addextendedproperty`): Index-level → omit; table-level → `COMMENT ON TABLE`; column-level → `COMMENT ON COLUMN`.
 
+## Workflow conventions
+
+- **Never auto-commit converted files.** After writing `.sql` and `.md` output, leave them uncommitted. The user will review and commit manually.
+
 ## Conversion output conventions
 
 - Schema and table names: **lowercase** (`sales.orders`)
