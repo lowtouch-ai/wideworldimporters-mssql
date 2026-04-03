@@ -29,14 +29,16 @@ Error: container postgres_15.1 is not running.
 Start it with: docker compose -f /mnt/c/Users/krish/git/AppZ-Images/docker-compose.agentomatic.yml up -d postgres
 ```
 
-## Step 3 — Create isolated test schema
+## Step 3 — Create isolated test schema and prerequisite schemas
 
 ```bash
-docker exec postgres_15.1 psql -U postgres -d postgres \
-  -c "CREATE SCHEMA IF NOT EXISTS wwi_test;"
+docker exec postgres_15.1 psql -U postgres -d postgres -c "
+CREATE SCHEMA IF NOT EXISTS wwi_test;
+CREATE SCHEMA IF NOT EXISTS sequences;
+"
 ```
 
-All test objects (stubs, functions, seed data) go into `wwi_test` to avoid polluting other schemas in the shared instance.
+All test objects (stubs, functions, seed data) go into `wwi_test` to avoid polluting other schemas in the shared instance. The `sequences` schema is always pre-created because every converted table DDL that uses a sequence emits `CREATE SEQUENCE IF NOT EXISTS sequences.<name>` — without the schema the statement errors before the table is even reached.
 
 ## Step 4 — Read and parse the function file
 
@@ -96,6 +98,7 @@ Note: Use `CREATE TABLE IF NOT EXISTS` so re-runs are idempotent. Known failure 
 - `geography` column → PostGIS not installed in container
 - FK to unconverted table → run `/mssql-to-postgres` on that table first
 - `concat()` in `GENERATED ALWAYS AS` → use `||` operator (concat is STABLE not IMMUTABLE)
+- `sequences` schema missing → fixed in Step 3 (pre-created unconditionally)
 
 ## Step 7 — Generate seed data
 
