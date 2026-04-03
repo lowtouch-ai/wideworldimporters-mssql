@@ -73,14 +73,32 @@ For each table referenced in the function body (`schema.table`):
 
 2. Check if the file exists via Glob.
 
-3. **If the DDL file exists:** attempt to pipe it into the container:
+3. **If the DDL file exists:** apply it with FK constraints stripped so that unresolved cross-table references never block table creation:
+
+   **a.** Pre-create all schemas named in `REFERENCES schema.` clauses so schema-not-found errors cannot occur:
    ```bash
-   docker exec -i postgres_15.1 psql -U postgres -d postgres < postgres/<Schema>/Tables/<Table>.sql
+   grep -oP 'REFERENCES \K\w+(?=\.)' postgres/<Schema>/Tables/<Table>.sql | sort -u | \
+     while read s; do
+       docker exec postgres_15.1 psql -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS $s;"
+     done
    ```
-   - If it succeeds: print `  ✓ Applied: postgres/<Schema>/Tables/<Table>.sql`
-   - **If it fails** (e.g. PostGIS extension missing, unsatisfied FK deps, immutable expression error): fall through to step 4 to create a targeted stub. Print the error as a warning:
+
+   **b.** Strip FK constraint lines and fix any trailing comma left before the closing `)`, then pipe into the container:
+   ```bash
+   python3 -c "
+   import re, sys
+   sql = open('postgres/<Schema>/Tables/<Table>.sql').read()
+   # Remove each CONSTRAINT ... FOREIGN KEY ... line (with optional leading comma)
+   sql = re.sub(r',?\s*\n\s*CONSTRAINT\s+\S+\s+FOREIGN KEY\s*\([^)]+\)\s*REFERENCES\s+\S+\s*\([^)]+\)', '', sql)
+   # Fix trailing comma before closing paren of CREATE TABLE
+   sql = re.sub(r',(\s*\n\s*\);)', r'\1', sql)
+   print(sql)
+   " | docker exec -i postgres_15.1 psql -U postgres -d postgres
+   ```
+   - If it succeeds: print `  ✓ Applied (FK constraints stripped): postgres/<Schema>/Tables/<Table>.sql`
+   - **If it still fails** (e.g. PostGIS extension missing, `concat()` in generated column): fall through to step 4. Print the error as a warning:
      ```
-     ⚠ Full DDL failed (see error above) — applying targeted stub instead
+     ⚠ Preprocessed DDL failed (see error above) — applying targeted stub instead
      ```
 
 4. **If the DDL file does not exist, or the apply failed in step 3:** generate and apply a minimal stub containing only the columns the function actually references (from UPDATE/INSERT/SELECT/WHERE clauses in the function body), plus the primary key:
@@ -94,11 +112,9 @@ For each table referenced in the function body (`schema.table`):
    ```
    Apply via psql and print: `  ⚠ Stub created: schema.table`
 
-Note: Use `CREATE TABLE IF NOT EXISTS` so re-runs are idempotent. Known failure causes:
-- `geography` column → PostGIS not installed in container
-- FK to unconverted table → run `/mssql-to-postgres` on that table first
-- `concat()` in `GENERATED ALWAYS AS` → use `||` operator (concat is STABLE not IMMUTABLE)
-- `sequences` schema missing → fixed in Step 3 (pre-created unconditionally)
+Note: Use `CREATE TABLE IF NOT EXISTS` so re-runs are idempotent. Remaining known failure causes after FK stripping:
+- `geography` column → PostGIS not installed in container → apply `CREATE EXTENSION IF NOT EXISTS postgis;` first (Step 5)
+- `concat()` in `GENERATED ALWAYS AS` → use `||` operator (STABLE not IMMUTABLE) → fix in the converted DDL file
 
 ## Step 7 — Generate seed data
 
@@ -197,8 +213,8 @@ Function:   schema.function_name(param1 type1, param2 type2, ...) RETURNS <type>
 Source:     postgres/<Schema>/Functions/<file>.sql
 
 Dependencies:
-  ✓ Applied: postgres/Sales/Tables/Orders.sql
-  ⚠ Stub:    application.people  (convert with /mssql-to-postgres)
+  ✓ Applied (FK stripped): postgres/Sales/Tables/Orders.sql
+  ⚠ Stub:                  schema.table  (convert with /mssql-to-postgres)
 
 Seed data applied: <n> rows across <m> tables
 
