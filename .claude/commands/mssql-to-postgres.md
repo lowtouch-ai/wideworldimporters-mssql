@@ -54,6 +54,16 @@ Tables that have `PERIOD FOR SYSTEM_TIME` and `WITH (SYSTEM_VERSIONING = ON ...)
   to plain `TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP`.
 - The `_Archive` companion table (already a plain table) converts normally.
 
+### Computed / persisted columns
+MSSQL `AS (expr) PERSISTED` columns → PostgreSQL `GENERATED ALWAYS AS (expr) STORED`.
+
+**Critical:** the expression must use only **IMMUTABLE** functions. Common pitfalls:
+- `concat(a, b)` is **STABLE** (not IMMUTABLE) in PostgreSQL → use `a || ' ' || b` instead
+- `json_query(col, '$.key')` → `(col::jsonb -> 'key')::text` — `::jsonb` cast IS immutable ✓
+- `CASE` expressions and arithmetic operators are immutable ✓
+
+Non-persisted computed columns (`AS (expr)` without `PERSISTED`) have no direct PostgreSQL equivalent — convert to a regular nullable column of the appropriate type and add a `-- NOTE: was a non-persisted computed column` comment.
+
 ### Constraint naming
 - `PRIMARY KEY CLUSTERED` → `PRIMARY KEY`
 - `UNIQUE NONCLUSTERED` → `UNIQUE`

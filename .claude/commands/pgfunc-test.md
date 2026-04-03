@@ -71,27 +71,31 @@ For each table referenced in the function body (`schema.table`):
 
 2. Check if the file exists via Glob.
 
-3. **If the DDL file exists:** pipe it into the container:
+3. **If the DDL file exists:** attempt to pipe it into the container:
    ```bash
    docker exec -i postgres_15.1 psql -U postgres -d postgres < postgres/<Schema>/Tables/<Table>.sql
    ```
-   Print: `  ✓ Applied: postgres/<Schema>/Tables/<Table>.sql`
+   - If it succeeds: print `  ✓ Applied: postgres/<Schema>/Tables/<Table>.sql`
+   - **If it fails** (e.g. PostGIS extension missing, unsatisfied FK deps, immutable expression error): fall through to step 4 to create a targeted stub. Print the error as a warning:
+     ```
+     ⚠ Full DDL failed (see error above) — applying targeted stub instead
+     ```
 
-4. **If the DDL file does not exist:** generate and apply a minimal stub. Build the CREATE TABLE statement with only the columns that the function actually uses (from SELECT, INSERT, UPDATE clauses in the function body), plus a minimal primary key:
+4. **If the DDL file does not exist, or the apply failed in step 3:** generate and apply a minimal stub containing only the columns the function actually references (from UPDATE/INSERT/SELECT/WHERE clauses in the function body), plus the primary key:
    ```sql
    CREATE TABLE IF NOT EXISTS schema.table (
-       id serial PRIMARY KEY
-       -- stub: add real columns when postgres/<Schema>/Tables/<Table>.sql is converted
+       "PrimaryKeyCol" integer PRIMARY KEY,
+       "Col1" type,
+       "Col2" type
+       -- stub: full DDL at postgres/<Schema>/Tables/<Table>.sql
    );
    ```
-   Apply via:
-   ```bash
-   docker exec postgres_15.1 psql -U postgres -d postgres \
-     -c "CREATE TABLE IF NOT EXISTS schema.table (id serial PRIMARY KEY);"
-   ```
-   Print: `  ⚠ Stub created: schema.table (run /mssql-to-postgres to get real DDL)`
+   Apply via psql and print: `  ⚠ Stub created: schema.table`
 
-Note: Use `CREATE TABLE IF NOT EXISTS` so re-runs are idempotent.
+Note: Use `CREATE TABLE IF NOT EXISTS` so re-runs are idempotent. Known failure causes:
+- `geography` column → PostGIS not installed in container
+- FK to unconverted table → run `/mssql-to-postgres` on that table first
+- `concat()` in `GENERATED ALWAYS AS` → use `||` operator (concat is STABLE not IMMUTABLE)
 
 ## Step 7 — Generate seed data
 
