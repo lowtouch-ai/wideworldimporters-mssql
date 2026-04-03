@@ -51,6 +51,21 @@ The command specification lives in `.claude/commands/pgfunc-test.md`. It uses th
 
 **Prerequisite:** The `postgres_15.1` container must be running.
 
+## Key workflow: Pre-flight dependency check
+
+Use the custom slash command:
+
+```
+/mssql-list-deps <file>
+```
+
+- Check deps before converting: `/mssql-list-deps wwi-ssdt/wwi-ssdt/Sales/Tables/Orders.sql`
+- Works on MSSQL source files or converted postgres output files
+
+The command specification lives in `.claude/commands/mssql-list-deps.md`. It is **read-only** — no files written. Reports each FK/sequence/UDT dependency with status (`✓ converted` / `✗ missing`) and suggests the conversion commands to run in order.
+
+Run this before `/mssql-to-postgres` or `/mssql-to-pgfunc` to understand what needs to be converted first.
+
 ## Key workflow: MSSQL → FastAPI endpoint conversion
 
 Use the custom slash command:
