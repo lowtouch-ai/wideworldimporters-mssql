@@ -94,7 +94,9 @@ Sequences are validated implicitly when the tables that reference them pass thei
 
 ---
 
-### Session 2 — Cross-Schema Reference Tables + Suppliers
+### Session 2 — Cross-Schema Reference Tables + Suppliers ✓ COMPLETED 2026-05-18
+
+**Results:** 14 tables (BuyingGroups, CustomerCategories, SupplierCategories, Colors, PackageTypes, StockGroups + all _Archive variants + Suppliers, Suppliers_Archive) converted and tested. All 14/14 pgtable-tests pass. PostGIS verified on Suppliers geography column.
 
 **Sales reference tables:**
 ```
