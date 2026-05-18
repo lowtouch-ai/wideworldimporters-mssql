@@ -148,7 +148,10 @@ Sequences are validated implicitly when the tables that reference them pass thei
 
 ---
 
-### Session 3 — Core Business Tables
+### Session 3 — Core Business Tables ✓ COMPLETED 2026-05-19
+
+**Results:** 9 tables (StockItems, StockItems_Archive, StockItemHoldings, StockItemStockGroups, Customers, Customers_Archive, PurchaseOrders, PurchaseOrderLines, SpecialDeals) converted and tested. All 9/9 pgtable-tests pass. PostGIS verified on Customers.DeliveryLocation geography column.
+
 
 **Customers + SpecialDeals (depend on Application + Sales ref):**
 ```
