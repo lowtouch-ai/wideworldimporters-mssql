@@ -51,6 +51,51 @@ The command specification lives in `.claude/commands/pgfunc-test.md`. It uses th
 
 **Prerequisite:** The `postgres_15.1` container must be running.
 
+## Key workflow: MSSQL → PostgreSQL view conversion
+
+Use the custom slash command:
+
+```
+/mssql-to-pgview <file-or-folder-path>
+```
+
+- Convert a single view: `/mssql-to-pgview wwi-ssdt/wwi-ssdt/WebApi/Views/Customers.sql`
+- Convert all views in a schema: `/mssql-to-pgview wwi-ssdt/wwi-ssdt/WebApi/Views`
+
+The command specification lives in `.claude/commands/mssql-to-pgview.md`. It converts MSSQL `CREATE VIEW` to PostgreSQL `CREATE OR REPLACE VIEW`, handling column aliases, geography property extraction, JSON transformations, and LEFT OUTER JOIN syntax.
+
+Output mirrors the source path: `wwi-ssdt/wwi-ssdt/WebApi/Views/Customers.sql` → `postgres/WebApi/Views/customers.sql`
+
+**Run after tables are converted** — views depend on tables existing.
+
+## Key workflow: MSSQL → PostgreSQL UDT conversion
+
+Use the custom slash command:
+
+```
+/mssql-to-pgudt <udt-sql-file>
+```
+
+- Convert a single UDT: `/mssql-to-pgudt "wwi-ssdt/wwi-ssdt/Website/User Defined Types/OrderIDList.sql"`
+
+The command specification lives in `.claude/commands/mssql-to-pgudt.md`. It converts MSSQL `CREATE TYPE … AS TABLE` (memory-optimized table types / TVPs) to PostgreSQL composite `CREATE TYPE`, stripping MSSQL-only clauses and documenting the calling convention change.
+
+Output goes to `postgres/<Schema>/Types/`: `postgres/Website/Types/order_id_list.sql`
+
+## Key workflow: Smoke-test a converted table in Postgres
+
+Use the custom slash command:
+
+```
+/pgtable-test <converted-table-sql-file>
+```
+
+- Test a table: `/pgtable-test postgres/Sales/Tables/Orders.sql`
+
+The command specification lives in `.claude/commands/pgtable-test.md`. It uses the existing `postgres_15.1` Docker container, applies FK dependency stubs, loads the table DDL (with FK constraints stripped for isolation), and runs `SELECT * FROM schema.table LIMIT 0` to verify the DDL is valid.
+
+**Prerequisite:** The `postgres_15.1` container must be running.
+
 ## Key workflow: Pre-flight dependency check
 
 Use the custom slash command:
