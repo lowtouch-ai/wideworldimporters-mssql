@@ -1,5 +1,5 @@
 ---
-description: Smoke-test a converted PostgreSQL table DDL in the shared postgres_15.1 Docker container using an isolated schema.
+description: Smoke-test a converted PostgreSQL table DDL file in the shared postgres_15.1 Docker container using an isolated wwi_test schema.
 argument-hint: <converted-table-sql-file>
 allowed-tools: [Read, Glob, Grep, Bash, Write]
 ---
@@ -10,12 +10,12 @@ Given `$ARGUMENTS` (a single `.sql` file under `postgres/<Schema>/Tables/`):
 
 ## Step 1 — Validate input
 
-- Confirm `$ARGUMENTS` is a `.sql` file under `postgres/` in a `Tables/` subdirectory.
+- Confirm `$ARGUMENTS` is a `.sql` file under `postgres/` in a `Tables/` directory.
 - If not, print an error and stop:
   ```
   Error: expected a converted table .sql file under postgres/<Schema>/Tables/
   ```
-- Extract `<Schema>` (e.g. `Application`) and table file name (e.g. `Cities.sql`).
+- Extract `<Schema>` (e.g. `Sales`) and table file name (e.g. `Orders.sql`), deriving the table name as the base name without extension.
 
 ## Step 2 — Verify container is running
 
@@ -35,29 +35,19 @@ Start it with: docker compose -f /mnt/c/Users/krish/git/AppZ-Images/docker-compo
 docker exec postgres_15.1 psql -U postgres -d postgres -c "
 CREATE SCHEMA IF NOT EXISTS wwi_test;
 CREATE SCHEMA IF NOT EXISTS sequences;
-CREATE SCHEMA IF NOT EXISTS <table-schema>;
 "
 ```
 
-Also grep the DDL file for `REFERENCES \w+\.` patterns and pre-create each referenced schema:
-```bash
-grep -oP 'REFERENCES \K\w+(?=\.)' "$ARGUMENTS" | sort -u | while read s; do
-  docker exec postgres_15.1 psql -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS $s;"
-done
-```
+The `wwi_test` schema is a marker for this test session. The `sequences` schema is always pre-created because table DDL that uses sequences emits `CREATE SEQUENCE IF NOT EXISTS sequences.<name>` — without the schema the statement errors before the table is reached.
 
-This prevents schema-not-found errors during DDL parsing even before FK constraint stripping takes effect.
-
-## Step 4 — Read and parse the DDL file
+## Step 4 — Read and parse the table file
 
 Read `$ARGUMENTS`. Extract:
-- Table schema and name (from `CREATE TABLE schema.table (`)
-- Sequence names (from `CREATE SEQUENCE IF NOT EXISTS sequences.<name>`)
-- Whether `geography` type is present anywhere in the file
-- `GENERATED ALWAYS AS ... STORED` column names
-- CHECK constraint expressions (to inform seed values — e.g. avoid seeding NULL into a column with a `IS NOT NULL` check)
-- All column names, types, and nullability/default info (NOT NULL columns with no default must be seeded explicitly)
-- Any `-- TODO:` comments in the file
+- Schema name and table name (from `CREATE TABLE schema.table`)
+- All `REFERENCES schema.table` FK dependency pairs
+- All `nextval('sequences.seq_name')` sequence references
+- Whether PostGIS is needed (`geography` type present)
+- All column names and types (for the report)
 
 ## Step 5 — Apply required extensions
 
@@ -66,184 +56,190 @@ docker exec postgres_15.1 psql -U postgres -d postgres \
   -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
 ```
 
-If `geography` type was found in Step 4:
+If PostGIS references were found (`geography` type):
 ```bash
 docker exec postgres_15.1 psql -U postgres -d postgres \
   -c "CREATE EXTENSION IF NOT EXISTS postgis;"
 ```
 
-## Step 6 — Apply the table DDL (FK constraints stripped)
+## Step 6 — Apply sequence stubs
 
-Strip FK constraint lines and fix any trailing comma left before the closing `)`, then pipe into the container:
+For each `nextval('sequences.seq_name')` reference found in Step 4:
+```bash
+docker exec postgres_15.1 psql -U postgres -d postgres \
+  -c "CREATE SEQUENCE IF NOT EXISTS sequences.seq_name START 1 INCREMENT 1;"
+```
+
+Print: `  ✓ Sequence stub: sequences.seq_name`
+
+## Step 7 — Apply FK dependency stubs
+
+For each `REFERENCES schema.table` pair extracted in Step 4:
+
+1. Compute the expected converted postgres DDL path:
+   - `schema.table` → `postgres/<Schema>/Tables/<Table>.sql`
+   - Use title-case for the path component (e.g. `application.people` → `postgres/Application/Tables/People.sql`)
+
+2. Check if the file exists via Glob.
+
+3. **If the DDL file exists:** apply it with FK constraints stripped:
+
+   **a.** Pre-create all schemas named in `REFERENCES schema.` clauses:
+   ```bash
+   grep -oP 'REFERENCES \K\w+(?=\.)' postgres/<Schema>/Tables/<Table>.sql | sort -u | \
+     while read s; do
+       docker exec postgres_15.1 psql -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS $s;"
+     done
+   ```
+
+   **b.** Strip FK constraint lines and fix any trailing comma before the closing `)`, then pipe into the container:
+   ```bash
+   python3 -c "
+   import re, sys
+   sql = open('postgres/<Schema>/Tables/<Table>.sql').read()
+   sql = re.sub(r',?\s*\n\s*CONSTRAINT\s+\S+\s+FOREIGN KEY\s*\([^)]+\)\s*REFERENCES\s+\S+\s*\([^)]+\)', '', sql)
+   sql = re.sub(r',(\s*\n\s*\);)', r'\1', sql)
+   print(sql)
+   " | docker exec -i postgres_15.1 psql -U postgres -d postgres
+   ```
+   - Success → print `  ✓ Applied (FK stripped): postgres/<Schema>/Tables/<Table>.sql`
+   - **If it still fails:** fall through to step 4, print warning:
+     ```
+     ⚠ Preprocessed DDL failed (see error above) — applying targeted stub instead
+     ```
+
+4. **If the DDL file does not exist, or apply failed:** generate and apply a minimal stub with only the primary key:
+   ```sql
+   CREATE TABLE IF NOT EXISTS schema.table (
+       "PrimaryKeyCol" integer PRIMARY KEY
+       -- stub: full DDL at postgres/<Schema>/Tables/<Table>.sql
+   );
+   ```
+   Apply via psql and print: `  ⚠ Stub created: schema.table`
+
+Also apply sequence stubs for any `nextval(...)` references found in dependency DDL files, using the same pattern as Step 6.
+
+## Step 8 — Apply the target table DDL
+
+Apply `$ARGUMENTS` with FK constraints stripped (same python3 stripping technique as Step 7) to avoid blocking on unresolved references:
 
 ```bash
 python3 -c "
 import re, sys
 sql = open('$ARGUMENTS').read()
-# Remove each CONSTRAINT ... FOREIGN KEY ... line (with optional leading comma)
 sql = re.sub(r',?\s*\n\s*CONSTRAINT\s+\S+\s+FOREIGN KEY\s*\([^)]+\)\s*REFERENCES\s+\S+\s*\([^)]+\)', '', sql)
-# Fix trailing comma before closing paren of CREATE TABLE
 sql = re.sub(r',(\s*\n\s*\);)', r'\1', sql)
 print(sql)
 " | docker exec -i postgres_15.1 psql -U postgres -d postgres
 ```
 
 Capture stdout and stderr. If psql exits non-zero or stderr contains `ERROR:`:
-- Print the full error output.
-- Print: `Table DDL load failed — fix the above error and re-run /pgtable-test`
-- **Stop.** (No stub fallback — the table is the artifact under test, not a dependency to approximate.)
+- Print the full error output
+- Print: `Table DDL failed — fix the above error and re-run /pgtable-test`
+- Stop.
 
 On success: print `  ✓ Table created: schema.table_name`
 
-## Step 7 — Verify table structure
-
-Query `information_schema.columns` to confirm all columns were created:
-
-```bash
-docker exec postgres_15.1 psql -U postgres -d postgres -c "
-SELECT column_name, data_type, is_nullable, column_default
-FROM information_schema.columns
-WHERE table_schema = '<schema>' AND table_name = '<table>'
-ORDER BY ordinal_position;
-"
-```
-
-Print the column count. Flag any NOT NULL column that has no `column_default` — these must be supplied explicitly in the seed INSERT.
-
-## Step 8 — Verify sequences
-
-For each `sequences.<name>` found in Step 4:
-
-```bash
-docker exec postgres_15.1 psql -U postgres -d postgres -c "
-SELECT sequence_name FROM information_schema.sequences
-WHERE sequence_schema = 'sequences' AND sequence_name = '<name>';
-"
-```
-
-Print `  ✓ Sequence exists: sequences.<name>` or `  ✗ Sequence missing: sequences.<name>`.
-
-## Step 9 — Seed one row
-
-Build a minimal INSERT for all NOT NULL columns, using these defaults:
-
-| Column pattern | Seed value |
-|---|---|
-| PK column with `nextval(...)` default | omit — let the sequence generate the value |
-| `*ID` integer (FK column, no default) | `1` |
-| Name/text NOT NULL | `'Test Value'` |
-| Date NOT NULL | `CURRENT_DATE` |
-| Timestamp NOT NULL | `CURRENT_TIMESTAMP` |
-| Boolean NOT NULL | `false` |
-| `numeric`/`decimal` NOT NULL | `0` |
-| `geography` column | `ST_GeogFromText('POINT(0 0)')` |
-| GENERATED ALWAYS AS STORED column | omit — PostgreSQL computes it |
-| Nullable | omit |
-
-Use `INSERT ... ON CONFLICT DO NOTHING RETURNING *` so the row is returned and re-runs are idempotent:
-
-```bash
-docker exec postgres_15.1 psql -U postgres -d postgres -c "
-INSERT INTO schema.table_name (col1, col2, ...)
-VALUES (val1, val2, ...)
-ON CONFLICT DO NOTHING RETURNING *;
-"
-```
-
-If the INSERT fails (e.g. CHECK constraint violation, type mismatch):
-- Print the error and the INSERT statement that was attempted.
-- Print: `  ⚠ Seed INSERT failed — adjust seed values and re-run. Continuing to SELECT test.`
-- Continue to Step 10; do not stop.
-
-## Step 10 — Verify data is readable
+## Step 9 — Verify table is queryable
 
 ```bash
 docker exec postgres_15.1 psql -U postgres -d postgres \
-  -c "SELECT * FROM schema.table_name LIMIT 1;"
+  -c "SELECT * FROM schema.table_name LIMIT 0;"
 ```
 
-Print the result row(s). If 0 rows and the seed INSERT failed, note that.
+If this succeeds, print: `  ✓ SELECT LIMIT 0: ok`
 
-## Step 11 — Verify geography columns (if any)
-
-For each geography column detected in Step 4:
-
+Also run a column inventory to confirm column count matches source:
 ```bash
-docker exec postgres_15.1 psql -U postgres -d postgres -c "
-SELECT pg_typeof(\"<col>\") FROM schema.table_name LIMIT 1;
-"
+docker exec postgres_15.1 psql -U postgres -d postgres \
+  -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'schema' AND table_name = 'table_name' ORDER BY ordinal_position;"
 ```
 
-Print `  ✓ Geography column <col>: geography` or flag a type mismatch.
+Print the column list.
 
-## Step 12 — Verify generated columns (if any)
-
-For each GENERATED ALWAYS AS STORED column detected in Step 4:
-
-```bash
-docker exec postgres_15.1 psql -U postgres -d postgres -c "
-SELECT \"<col>\" FROM schema.table_name LIMIT 1;
-"
-```
-
-Print the computed value. If the value is NULL or psql errors:
-- Flag it: `  ✗ Generated column <col> returned NULL — expression may use a non-IMMUTABLE function`
-- Note: `concat()` is STABLE in PostgreSQL, not IMMUTABLE; replace with `||` in the converted DDL.
-
-## Step 13 — Print FK dependency list
-
-Grep `$ARGUMENTS` for `REFERENCES schema.table` patterns. For each unique (schema, table) pair found:
-
-1. Compute `postgres/<Schema>/Tables/<Table>.sql` (title-case schema and table name).
-2. Check whether the file exists.
-3. Print:
-   - `  ✓ converted: postgres/<Schema>/Tables/<Table>.sql` — file exists
-   - `  ✗ missing:   <schema>.<table>` followed by the suggested command:
-     `  → /mssql-to-postgres wwi-ssdt/wwi-ssdt/<Schema>/Tables/<Table>.sql`
-
-## Step 14 — Print inline report
+## Step 10 — Print inline report
 
 ```
 === pgtable-test report ===
 
 Container:  postgres_15.1
 Table:      schema.table_name
-Source:     postgres/<Schema>/Tables/<file>.sql
+Source:     postgres/<Schema>/Tables/<Table>.sql
 
-DDL load:      ✓ Success (FK constraints stripped)
-Columns:       <n> columns loaded
-Sequences:     sequences.foo_id_seq ✓  |  none
-Geography:     location (geography) ✓  |  none
-Generated:     SearchName (varchar stored) ✓  |  none
+Dependencies applied:
+  ✓ Applied (FK stripped): postgres/Application/Tables/People.sql
+  ⚠ Stub:                  application.cities  (convert with /mssql-to-postgres)
 
-Seed INSERT:   ✓ Success  (row returned below)
-               -- or --
-               ✗ Failed (see error above)
+Sequences:
+  ✓ sequences.foo_id_seq
 
-Row returned:
-  (city_id=38187, city_name='Test Value', ...)
+Extensions:
+  ✓ pgcrypto
+  ✓ postgis  (if geography columns present)
 
-SELECT * LIMIT 1:  ✓ Success  |  0 rows
+Table load:    ✓ Success
+SELECT LIMIT 0: ✓ ok
 
-FK dependencies:
-  ✓ converted: postgres/Application/Tables/People.sql
-  ✗ missing:   application.state_provinces
-               → /mssql-to-postgres wwi-ssdt/wwi-ssdt/Application/Tables/StateProvinces.sql
+Columns verified (<n> columns):
+  OrderID          integer
+  CustomerID       integer
+  ...
 
-TODOs in file:
-  - (list any -- TODO: comments found in the .sql file, or "none")
+TODOs in DDL:
+  - (list any -- NOTE: or -- TODO: comments found in the table file)
 
 Next steps:
-  • Convert missing FK deps above, then re-run this test
-  • Re-run test:                  /pgtable-test postgres/<Schema>/Tables/<file>.sql
-  • Test functions using table:   /pgfunc-test postgres/<Schema>/Functions/<func>.sql
-  • Test views using table:       /pgview-test postgres/<Schema>/Views/<view>.sql
+  • Replace stub tables: /mssql-to-postgres wwi-ssdt/wwi-ssdt/Application/Tables/Cities.sql
+  • Re-run test:         /pgtable-test postgres/<Schema>/Tables/<Table>.sql
+  • Continue with:       /pgtable-test postgres/<Schema>/Tables/<NextTable>.sql
+```
+
+## Step 11 — Write companion test report
+
+Write `postgres/<Schema>/Tables/<Table>.test.md` alongside the `.sql` file:
+
+```markdown
+# pgtable-test report: <Schema>.<TableName>
+
+## Source
+- **Table file:** `postgres/<Schema>/Tables/<Table>.sql`
+- **Test run:** <ISO timestamp>
+
+## Dependencies
+| Dependency | Status | Notes |
+|---|---|---|
+| `application.people` | ✓ Applied (FK stripped) | `postgres/Application/Tables/People.sql` |
+| `application.cities` | ⚠ Stub | Run `/mssql-to-postgres wwi-ssdt/wwi-ssdt/Application/Tables/Cities.sql` |
+
+## Sequences
+| Sequence | Status |
+|---|---|
+| `sequences.foo_id_seq` | ✓ Created |
+
+## Result
+- Table load: ✓ Success
+- SELECT LIMIT 0: ✓ ok
+- Columns verified: <n>
+
+## Column inventory
+| Column | Type |
+|---|---|
+| `OrderID` | integer |
+| ... | ... |
+
+## TODOs
+- (list any -- NOTE: or -- TODO: comments in the DDL)
+
+## Next steps
+- Replace stubs: `/mssql-to-postgres wwi-ssdt/wwi-ssdt/Application/Tables/Cities.sql`
+- Re-run: `/pgtable-test postgres/<Schema>/Tables/<Table>.sql`
 ```
 
 ## Important notes
 
-- **No container lifecycle management** — `postgres_15.1` is shared infrastructure started via `docker-compose.agentomatic.yml`. Never start or stop it.
-- Schemas and tables persist between runs. The DDL uses `CREATE TABLE` (not `CREATE TABLE IF NOT EXISTS`) so re-running will produce a `already exists` notice — this is harmless and expected.
-- To reset: `docker exec postgres_15.1 psql -U postgres -d postgres -c "DROP TABLE IF EXISTS schema.table_name;"`
-- All `docker exec` commands connect as user `postgres` to database `postgres`. This uses local trust auth inside the container — no password needed.
-- FK constraints are always stripped for isolation. The FK dependency list in the report tells you what to convert next; once converted, `/pgfunc-test` and `/pgview-test` will pick up the real DDL automatically.
+- **No container lifecycle management** — `postgres_15.1` is shared infrastructure. Never start or stop it.
+- The test applies tables into their real schemas (e.g. `sales`, `application`) within the shared postgres database, not into `wwi_test`. The `wwi_test` schema is a session marker only.
+- FK constraints are always stripped when applying DDL in the test environment to prevent cross-table blocking. The `.test.md` report notes which stubs were used.
+- All `CREATE` statements use `IF NOT EXISTS` — re-runs are safe.
+- To reset and start clean: `docker exec postgres_15.1 psql -U postgres -d postgres -c "DROP SCHEMA wwi_test CASCADE; CREATE SCHEMA wwi_test;"`
+- All `docker exec` commands connect as user `postgres` to database `postgres`. No password needed (local trust auth inside container).

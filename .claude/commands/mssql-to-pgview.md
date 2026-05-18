@@ -1,6 +1,6 @@
 ---
-description: Convert a MSSQL VIEW (.sql file or folder) to a PostgreSQL CREATE OR REPLACE VIEW, writing output to postgres/<Schema>/Views/.
-argument-hint: <view-sql-file-or-folder>
+description: Convert a MSSQL CREATE VIEW file (or all .sql files in a Views folder) to PostgreSQL CREATE OR REPLACE VIEW and report which referenced tables still need conversion.
+argument-hint: <file-or-folder-path>
 allowed-tools: [Read, Glob, Grep, Write, Edit]
 ---
 
@@ -10,194 +10,228 @@ Given `$ARGUMENTS` (a `.sql` file or a directory):
 
 ## Step 1 — Collect files to convert
 
-- If `$ARGUMENTS` is a `.sql` file → convert that one file.
+- If `$ARGUMENTS` is a `.sql` file under `wwi-ssdt/wwi-ssdt/<Schema>/Views/` → convert that one file.
 - If `$ARGUMENTS` is a directory → glob `**/*.sql` inside it and convert every file found.
-- If a file does not contain `CREATE VIEW`, skip it and print a warning.
+- If the path does not match `wwi-ssdt/wwi-ssdt/<Schema>/Views/`, print an error and stop:
+  ```
+  Error: expected a view .sql file or folder under wwi-ssdt/wwi-ssdt/<Schema>/Views/
+  ```
 
 ## Step 2 — For each file, apply these conversion rules
 
-### Identifiers
-- Strip square-bracket quoting everywhere: `[WebApi].[Customers]` → `webapi.customers`.
-- Lowercase schema and view names.
-- **Preserve original casing for column names and aliases.**
-- Remove `GO` statement separators.
-- Replace `CREATE VIEW` / `CREATE   VIEW` (any extra whitespace) with `CREATE OR REPLACE VIEW`.
+### Quoting / identifiers
+- Strip all `[square bracket]` quoting from identifiers.
+- Schema names → **lowercase** (e.g. `[WebApi]` → `webapi`).
+- View names → **lowercase snake_case** (e.g. `[SalesOrders]` → `sales_orders`).
+- **Preserve original casing for column names** in the SELECT list (e.g. `CustomerID`, `FullName`).
 
-### Column alias syntax
-MSSQL allows `Alias = expression` — PostgreSQL does not. Convert to standard SQL:
-```sql
--- MSSQL
-PostalCity = pc.CityName,
-SalesPerson = sp.FullName
+### View declaration
+- `CREATE VIEW [Schema].[ViewName]` → emit `CREATE SCHEMA IF NOT EXISTS schema;` first, then `CREATE OR REPLACE VIEW schema.view_snake_name AS`
+- `WITH SCHEMABINDING` → remove (not needed in PostgreSQL)
+- `WITH VIEW_METADATA` → remove
 
--- PostgreSQL
-pc.CityName AS PostalCity,
-sp.FullName AS SalesPerson
-```
-Apply this to every occurrence in the SELECT list.
+### Column aliases
+MSSQL allows the reversed alias form `Alias = expr`. Convert to standard SQL form:
+- `ColAlias = expr` → `expr AS ColAlias`
+- `expr AS ColAlias` → unchanged
 
-### Data type casts inside the view body
+### JOIN syntax
+- `LEFT OUTER JOIN` → `LEFT JOIN`
+- `RIGHT OUTER JOIN` → `RIGHT JOIN`
+- `FULL OUTER JOIN` → `FULL JOIN`
+- `INNER JOIN` → `JOIN` (or keep `INNER JOIN` — both valid)
+
+### Schema-qualified references
+- `[Schema].[Table]` → `schema.table` (both lowercase) in FROM, JOIN, and subquery clauses
+- `[Schema].[View]` → `schema.view_snake_name` when referencing another view
+
+### Data type casts
 | MSSQL | PostgreSQL |
 |---|---|
-| `CAST(x AS nvarchar(n))` | `CAST(x AS VARCHAR(n))` |
-| `CAST(x AS nvarchar)` | `CAST(x AS TEXT)` |
-| `CAST(x AS bit)` | `CAST(x AS BOOLEAN)` |
-| `CAST(x AS datetime2)` | `CAST(x AS TIMESTAMP)` |
-| `CONVERT(nvarchar, x)` | `x::TEXT` |
-| `CONVERT(int, x)` | `x::INTEGER` |
+| `CAST(x AS NVARCHAR(n))` | `CAST(x AS VARCHAR(n))` |
+| `CAST(x AS NVARCHAR(MAX))` | `CAST(x AS TEXT)` |
+| `CAST(x AS BIT)` | `CAST(x AS BOOLEAN)` |
+| `CAST(x AS DATETIME2)` | `CAST(x AS TIMESTAMP)` |
+| `CONVERT(type, expr)` | `CAST(expr AS type)` (adjust type per above) |
 
-### FOR JSON PATH (MSSQL-specific)
-`FOR JSON PATH, WITHOUT_ARRAY_WRAPPER` inside a subquery has no direct PostgreSQL equivalent.
-Convert the subquery to a `json_build_object(...)` call:
+### Functions
+| MSSQL | PostgreSQL |
+|---|---|
+| `ISNULL(x, y)` | `COALESCE(x, y)` |
+| `GETDATE()` | `CURRENT_TIMESTAMP` |
+| `SYSDATETIME()` | `CURRENT_TIMESTAMP` |
+| `LEN(x)` | `LENGTH(x)` |
+| `CHARINDEX(s, t)` | `POSITION(s IN t)` |
+| `SUBSTRING(x, s, l)` | `SUBSTRING(x FROM s FOR l)` |
+| `CONCAT(a, b, ...)` | `CONCAT(a, b, ...)` (unchanged) |
+| `COALESCE(x, y)` | `COALESCE(x, y)` (unchanged) |
+| `NULLIF(x, y)` | `NULLIF(x, y)` (unchanged) |
+| `TOP(n)` | `LIMIT n` (append to end of query) |
 
-```sql
--- MSSQL (simplified example)
-JSON_QUERY((SELECT
-    [type] = 'Feature',
-    [geometry.type] = 'Point',
-    [geometry.coordinates] = JSON_QUERY(CONCAT('[', c.DeliveryLocation.Long, ',', c.DeliveryLocation.Lat, ']'))
-FOR JSON PATH, WITHOUT_ARRAY_WRAPPER))
-
--- PostgreSQL
-json_build_object(
-    'type', 'Feature',
-    'geometry', json_build_object(
-        'type', 'Point',
-        'coordinates', json_build_array(ST_X(c.DeliveryLocation::geometry), ST_Y(c.DeliveryLocation::geometry))
-    )
-)
-```
-
-Rules for the translation:
-- Each `[key] = value` pair inside the subquery becomes a `'key', value` argument to `json_build_object`.
-- Dot-notation keys like `[geometry.type]` and `[geometry.coordinates]` represent nested objects — group them under a parent key (`geometry`) using a nested `json_build_object`.
-- `[properties.Foo]` → nest under a `properties` key.
-- `JSON_QUERY(CONCAT('[', x.Long, ',', x.Lat, ']'))` → `json_build_array(ST_X(x::geometry), ST_Y(x::geometry))`.
-- Remove the outer `JSON_QUERY((...))` wrapper — `json_build_object` already returns `json`.
-- Keep the column alias from the `Alias = JSON_QUERY(...)` pattern: `DeliveryLocation = JSON_QUERY(...)` → `json_build_object(...) AS DeliveryLocation`.
-
-### Geography / spatial columns
+### Geography property extraction
+MSSQL geography objects expose `.Lat` and `.Long` as property accessors. Map to PostGIS:
 - `col.Long` → `ST_X(col::geometry)`
 - `col.Lat` → `ST_Y(col::geometry)`
 - `col.STAsText()` → `ST_AsText(col)`
-- Plain `col` references to a `geography` typed column — leave as-is; PostGIS geography columns work in SELECT.
+- `col.STDistance(other)` → `ST_Distance(col::geometry, other::geometry)`
 
-### DECOMPRESS / compression functions
-`DECOMPRESS(col)` has no PostgreSQL equivalent. Replace with a placeholder and add a TODO comment:
+Add a PostGIS note in the companion `.md` if any geography conversions were applied.
+
+### JSON transformations
+`JSON_QUERY(... FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)` — these are complex MSSQL-specific JSON serialisation expressions. Convert as follows:
+
+**Simple case** — a subquery that selects columns and wraps them in JSON:
 ```sql
--- TODO: DECOMPRESS has no PostgreSQL equivalent; handle decompression in application layer
-col AS FullSensorData
+-- MSSQL
+JSON_QUERY((SELECT col1 = t.Col1, col2 = t.Col2 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER))
+
+-- PostgreSQL
+(SELECT row_to_json(t) FROM (SELECT t.Col1 AS col1, t.Col2 AS col2) t)
 ```
 
-### JSON_VALUE / JSON_QUERY (used outside FOR JSON)
-- `JSON_VALUE(col, '$.key')` → `col::jsonb ->> 'key'`
-- `JSON_QUERY(col, '$.key')` → `(col::jsonb -> 'key')::text`
+**Array case** — `FOR JSON PATH` without `WITHOUT_ARRAY_WRAPPER`:
+```sql
+-- MSSQL
+(SELECT col FROM tbl FOR JSON PATH)
 
-### ISNULL / COALESCE
-- `ISNULL(a, b)` → `COALESCE(a, b)`
+-- PostgreSQL
+(SELECT json_agg(row_to_json(r)) FROM (SELECT col FROM tbl) r)
+```
 
-### String functions
-- `LEN(x)` → `LENGTH(x)`
-- `CHARINDEX(needle, haystack)` → `STRPOS(haystack, needle)`
-- `SUBSTRING(x, start, len)` → `SUBSTRING(x FROM start FOR len)`
-- `CONCAT(a, b, ...)` → `CONCAT(a, b, ...)` (unchanged — PostgreSQL supports it)
+**Complex case** — nested keys using dot notation (e.g. `[geometry.coordinates]`, `[properties.City]`):
+Emit a `-- TODO: verify JSON shape matches original FOR JSON PATH output` comment and do a best-effort conversion using `json_build_object`:
+```sql
+-- PostgreSQL (best-effort)
+json_build_object(
+    'type', 'Feature',
+    'geometry', json_build_object('type', 'Point', 'coordinates', ARRAY[ST_X(col::geometry), ST_Y(col::geometry)]),
+    'properties', json_build_object('City', city_col)
+)
+-- TODO: verify JSON shape matches original FOR JSON PATH output
+```
 
-### Schema references in FROM / JOIN
-- `[Application].People` → `application.people`
-- `Sales.Customers` → `sales.customers` (already unbracketed; still lowercase the schema)
-- Apply consistently to all `FROM`, `JOIN`, subquery `FROM` clauses.
+Always flag `FOR JSON PATH` conversions with a TODO comment.
 
-### Schema creation
-Prepend `CREATE SCHEMA IF NOT EXISTS <schema>;` at the top of every output file, where `<schema>` is the lowercase view schema.
+### String concatenation
+- `col1 + col2` (string concatenation in MSSQL) → `col1 || col2`
+- Only applies when both sides are character types; numeric `+` is unchanged.
+
+### Schema creation header
+Prepend `CREATE SCHEMA IF NOT EXISTS schema;` at the top of every output file.
 
 ## Step 3 — Determine output path
 
-Mirror the source path under `postgres/`:
-- Source: `wwi-ssdt/wwi-ssdt/WebApi/Views/Customers.sql`
-- Output: `postgres/WebApi/Views/Customers.sql`
+Mirror the source path under `postgres/`, using the snake_case view name:
+- Source: `wwi-ssdt/wwi-ssdt/WebApi/Views/SalesOrders.sql`
+- Output: `postgres/WebApi/Views/sales_orders.sql`
 
-Create the directory if it does not exist.
+Create the directory if it does not exist (Write tool creates missing directories).
 
-## Step 4 — Dependency report
+## Step 4 — Check table dependencies
 
-After writing each converted file, scan the output for every `schema.table` or `schema.view` reference in `FROM` and `JOIN` clauses. Build a deduplicated list.
+After writing each converted file, scan the output for all `schema.table` references in FROM and JOIN clauses. Build a deduplicated list of referenced schema/table pairs.
 
-For each referenced object:
-1. Check for a converted table: `postgres/<Schema>/Tables/<Object>.sql`
-2. Check for a converted view: `postgres/<Schema>/Views/<Object>.sql`
-3. If neither exists → add to the "needs conversion" list.
+For each referenced pair:
+1. Compute its expected postgres path: `postgres/<Schema>/Tables/<Table>.sql`
+2. If the postgres path does **not** exist → add to "needs conversion" list, noting which view(s) depend on it.
+3. Also check for referenced views: `postgres/<Schema>/Views/<view_snake>.sql` — note if missing.
 
 End the response with a **"Next files to convert"** section:
 
 ```
-Next files to convert (dependencies of what was just converted):
+Next files to convert (table dependencies of converted views):
 
   Run: /mssql-to-postgres wwi-ssdt/wwi-ssdt/Sales/Tables/Customers.sql
-       → required by: webapi.customers
+       → required by: webapi.customers, website.customers
 
-  Run: /mssql-to-pgview wwi-ssdt/wwi-ssdt/WebApi/Views/SalesOrders.sql
-       → required by: webapi.invoices
+  Run: /mssql-to-postgres wwi-ssdt/wwi-ssdt/Application/Tables/People.sql
+       → required by: webapi.customers (PrimaryContact, AlternateContact)
 
-  Tip: Convert a whole schema at once:
+  Tip: Convert all tables in a schema at once:
        /mssql-to-postgres wwi-ssdt/wwi-ssdt/Sales/Tables
 ```
 
 ## Step 5 — Write conversion summary as a Markdown file
 
-For each converted file, write a `.md` companion file alongside the `.sql` output.
-
-- Source: `wwi-ssdt/wwi-ssdt/WebApi/Views/Customers.sql`
-- SQL output: `postgres/WebApi/Views/Customers.sql`
-- Summary output: `postgres/WebApi/Views/Customers.md`
-
-The markdown file must contain:
+For each converted file, write a `.md` companion alongside the output `.sql`:
+- Source: `wwi-ssdt/wwi-ssdt/WebApi/Views/SalesOrders.sql`
+- SQL output: `postgres/WebApi/Views/sales_orders.sql`
+- Summary output: `postgres/WebApi/Views/sales_orders.md`
 
 ```markdown
-# Conversion summary: <OriginalFileName>.sql
+# Conversion summary: <Schema>.<ViewName>
 
 ## Files converted
 - **Source:** `wwi-ssdt/wwi-ssdt/<Schema>/Views/<View>.sql`
-- **Output:** `postgres/<Schema>/Views/<View>.sql`
+- **Output:** `postgres/<Schema>/Views/<view_snake>.sql`
 
 ## Conversions applied
-- `[Schema].[View]` → `schema.view` (CREATE OR REPLACE VIEW)
-- (one bullet per rule actually used, e.g. `Alias = expr` → `expr AS Alias`)
-- (FOR JSON PATH → json_build_object if applicable)
-- (geography .Long/.Lat → ST_X/ST_Y if applicable)
-- (DECOMPRESS TODO if applicable)
-- (data type casts if applicable)
+- `[Schema].[ViewName]` → `schema.view_snake_name`
+- (one bullet per rule actually applied, e.g. `ISNULL → COALESCE`, `LEFT OUTER JOIN → LEFT JOIN`)
+- (column alias bullet if `Alias = expr` form was reversed)
+- (geography bullet if `.Lat`/`.Long` were converted)
+- (JSON TODO bullet if FOR JSON PATH was present)
+- (string concat bullet if `+` → `||`)
 
-## Unresolved dependencies
+## TODOs
+- (list each `-- TODO:` comment emitted in the output, if any)
 
-| Dependency | Referenced in | Run |
+## Table dependencies
+| Table | Postgres file | Status |
 |---|---|---|
-| `sales.customers` | FROM clause | `/mssql-to-postgres wwi-ssdt/wwi-ssdt/Sales/Tables/Customers.sql` |
+| `sales.customers` | `postgres/Sales/Tables/Customers.sql` | ✗ missing |
+| `application.people` | `postgres/Application/Tables/People.sql` | ✗ missing |
 
-> Tip: `/mssql-to-pgview wwi-ssdt/wwi-ssdt/<Schema>/Views` converts the whole folder at once.
+> Tip: `/mssql-to-postgres wwi-ssdt/wwi-ssdt/Sales/Tables/Customers.sql`
 ```
 
-Only include bullets for conversions actually applied. Omit the dependency table if all referenced objects already have postgres output files.
+Only include bullets for conversions actually performed. Omit the dependency table if all referenced tables already have postgres output files.
 
-If `geography` columns or `ST_X`/`ST_Y` were used, append:
+If geography columns were converted, append:
 
 ```markdown
 ## PostGIS note
-This view uses PostGIS spatial functions. Run `CREATE EXTENSION IF NOT EXISTS postgis;` before applying this file.
-```
-
-If any `DECOMPRESS` TODOs were added, append:
-
-```markdown
-## TODOs
-- `DECOMPRESS` has no PostgreSQL equivalent — decompression must be handled in the application layer.
+This view references PostGIS geography columns. Ensure `CREATE EXTENSION IF NOT EXISTS postgis;` has been run and that the underlying tables are converted with their `geography` columns intact.
 ```
 
 ## Step 6 — Print inline summary
 
-After writing both files, print the same summary content inline in the conversation (do not make the user open the `.md` file). Then print the **"Next files to convert"** section.
+After writing both files, print the same summary to the conversation (do not make the user open the `.md` file). Then print the **"Next files to convert"** section.
 
-If PostGIS was used, also print:
-`"PostGIS extension required — run CREATE EXTENSION IF NOT EXISTS postgis; first."`
+```
+Converted: wwi-ssdt/wwi-ssdt/WebApi/Views/SalesOrders.sql
+       → postgres/WebApi/Views/sales_orders.sql
 
-If DECOMPRESS TODOs were added, also print:
-`"DECOMPRESS placeholder added — decompression must be handled in the application layer."`
+Conversions applied:
+  • [WebApi].[SalesOrders] → webapi.sales_orders
+  • LEFT OUTER JOIN → LEFT JOIN (3 occurrences)
+  • ISNULL → COALESCE (1 occurrence)
+  • Column alias `Alias = expr` → `expr AS Alias` (2 columns)
+
+TODOs: 1
+  • FOR JSON PATH conversion — verify JSON shape matches original
+
+Next files to convert (table dependencies):
+
+  Run: /mssql-to-postgres wwi-ssdt/wwi-ssdt/Sales/Tables/Orders.sql
+       → required by: webapi.sales_orders
+
+  Run: /mssql-to-postgres wwi-ssdt/wwi-ssdt/Sales/Tables/Invoices.sql
+       → required by: webapi.sales_orders
+```
+
+If converting a whole folder, print a consolidated report across all files at the end.
+
+## Important notes
+
+- **Never auto-commit generated files.** Leave output uncommitted for user review.
+- Preserve original column name casing in the SELECT list; use double-quotes for column aliases only when the name contains special characters or is a reserved word.
+- `FOR JSON PATH` conversions are always flagged with `-- TODO:` — do not silently drop or rewrite complex JSON expressions without a TODO marker.
+- If a view references another view (not just tables), note the dependency but do not block conversion.
+- Other unconverted views in the same `Views/` directory:
+
+```
+Other views in <Schema> not yet converted:
+
+  /mssql-to-pgview "wwi-ssdt/wwi-ssdt/<Schema>/Views/OtherView.sql"
+```
