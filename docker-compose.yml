@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2017-latest
+    container_name: wwi_mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "Sp1d3rman!"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    networks:
+      - wwi-net
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Sp1d3rman!", "-Q", "SELECT 1"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+
+  wwi-app:
+    build:
+      context: ./wwi-app
+      dockerfile: Dockerfile
+    container_name: wwi_app
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      ConnectionStrings__WWI: "Server=mssql;Database=WideWorldImporters;User=WebApi;Password=Sp1d3rman!;Application Name=WideWorldImporters"
+    ports:
+      - "8083:80"
+    depends_on:
+      mssql:
+        condition: service_healthy
+    networks:
+      - wwi-net
+
+volumes:
+  mssql_data:
+
+networks:
+  wwi-net:
+    driver: bridge
