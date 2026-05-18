@@ -189,6 +189,10 @@ Sequences are validated implicitly when the tables that reference them pass thei
 
 ---
 
+### Session 4 — Transaction & Line-Item Tables + DataLoadSimulation + Misc ✓ COMPLETED 2026-05-19
+
+**Results:** 15 tables converted and tested. All 15/15 pgtable-tests pass. Key special handling: MEMORY_OPTIMIZED stripped (3 tables), SYSTEM_VERSIONING stripped (ColdRoomTemperatures), COLUMNSTORE indexes omitted (OrderLines, InvoiceLines, StockItemTransactions), partition scheme PS_TransactionDate stripped (CustomerTransactions, SupplierTransactions), PERSISTED computed IsFinalized → BOOLEAN GENERATED ALWAYS AS STORED (CustomerTransactions, SupplierTransactions), non-persisted computed columns ConfirmedDeliveryTime/ConfirmedReceivedBy → plain nullable columns (Invoices).
+
 ### Session 4 — Transaction & Line-Item Tables + DataLoadSimulation + Misc
 
 **Sales transactions:**
