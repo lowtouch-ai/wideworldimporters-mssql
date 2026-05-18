@@ -1,0 +1,5 @@
+CREATE SCHEMA IF NOT EXISTS sequences;
+
+CREATE SEQUENCE IF NOT EXISTS sequences.transaction_id_seq
+    START 714101
+    INCREMENT 1;

@@ -1,0 +1,5 @@
+CREATE SCHEMA IF NOT EXISTS sequences;
+
+CREATE SEQUENCE IF NOT EXISTS sequences.order_line_id_seq
+    START 492602
+    INCREMENT 1;

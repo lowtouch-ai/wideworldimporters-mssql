@@ -1,0 +1,5 @@
+CREATE SCHEMA IF NOT EXISTS sequences;
+
+CREATE SEQUENCE IF NOT EXISTS sequences.stock_item_id_seq
+    START 228
+    INCREMENT 1;

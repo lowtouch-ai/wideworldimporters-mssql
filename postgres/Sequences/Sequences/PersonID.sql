@@ -1,0 +1,5 @@
+CREATE SCHEMA IF NOT EXISTS sequences;
+
+CREATE SEQUENCE IF NOT EXISTS sequences.person_id_seq
+    START 3310
+    INCREMENT 1;

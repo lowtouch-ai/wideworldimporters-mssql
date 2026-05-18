@@ -1,0 +1,5 @@
+CREATE SCHEMA IF NOT EXISTS sequences;
+
+CREATE SEQUENCE IF NOT EXISTS sequences.invoice_id_seq
+    START 149911
+    INCREMENT 1;
