@@ -38,7 +38,9 @@ Sequences → Application root tables → Cross-schema ref tables → Purchasing
 
 ## Session-by-Session Execution Plan
 
-### Session 1 — Sequences + Application Tables
+### Session 1 — Sequences + Application Tables ✓ COMPLETED 2026-05-18
+
+**Results:** 26 sequences + 16 Application tables converted and tested. All 16/16 pgtable-tests pass. PostGIS installed; 7 geography columns verified. PR #5: `feature/session1-migration`.
 
 **Sequences (26 files — bulk):**
 ```
@@ -92,7 +94,9 @@ Sequences are validated implicitly when the tables that reference them pass thei
 
 ---
 
-### Session 2 — Cross-Schema Reference Tables + Suppliers
+### Session 2 — Cross-Schema Reference Tables + Suppliers ✓ COMPLETED 2026-05-18
+
+**Results:** 14 tables (BuyingGroups, CustomerCategories, SupplierCategories, Colors, PackageTypes, StockGroups + all _Archive variants + Suppliers, Suppliers_Archive) converted and tested. All 14/14 pgtable-tests pass. PostGIS verified on Suppliers geography column.
 
 **Sales reference tables:**
 ```
@@ -144,7 +148,10 @@ Sequences are validated implicitly when the tables that reference them pass thei
 
 ---
 
-### Session 3 — Core Business Tables
+### Session 3 — Core Business Tables ✓ COMPLETED 2026-05-19
+
+**Results:** 9 tables (StockItems, StockItems_Archive, StockItemHoldings, StockItemStockGroups, Customers, Customers_Archive, PurchaseOrders, PurchaseOrderLines, SpecialDeals) converted and tested. All 9/9 pgtable-tests pass. PostGIS verified on Customers.DeliveryLocation geography column.
+
 
 **Customers + SpecialDeals (depend on Application + Sales ref):**
 ```
