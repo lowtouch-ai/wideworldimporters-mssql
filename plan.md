@@ -38,7 +38,9 @@ Sequences → Application root tables → Cross-schema ref tables → Purchasing
 
 ## Session-by-Session Execution Plan
 
-### Session 1 — Sequences + Application Tables
+### Session 1 — Sequences + Application Tables ✓ COMPLETED 2026-05-18
+
+**Results:** 26 sequences + 16 Application tables converted and tested. All 16/16 pgtable-tests pass. PostGIS installed; 7 geography columns verified. PR #5: `feature/session1-migration`.
 
 **Sequences (26 files — bulk):**
 ```
