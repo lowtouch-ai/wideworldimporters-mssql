@@ -251,6 +251,10 @@ Sequences are validated implicitly when the tables that reference them pass thei
 
 ---
 
+### Session 5 — Website UDTs + All Functions ✓ COMPLETED 2026-05-19
+
+**Results:** 4 UDTs converted (OrderIDList, OrderLineList, OrderList, SensorDataList). 12 functions converted and tested across Application (1), DataLoadSimulation (10), Website (1). All 12/12 pgfunc-tests pass. Key special handling: MEMORY_OPTIMIZED stripped from all UDTs, IDENTITY stripped from SensorDataList, IS_ROLEMEMBER → pg_has_role with EXCEPTION WHEN undefined_object wrapper (DetermineCustomerAccess), ABS(CHECKSUM(NEWID())) → random() (GetBogativePhoneNumber was a SP with OUTPUT param converted to scalar function), unquoted column names used throughout to match lowercase-folded DDL.
+
 ### Session 5 — Website UDTs + All Functions
 
 **Website User Defined Types:**
