@@ -1,7 +1,8 @@
-﻿using Belgrade.SqlClient;
+using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MsSql.RestApi;
+using Newtonsoft.Json;
+using Npgsql;
 using System;
 using System.IO;
 using System.Security.Claims;
@@ -11,958 +12,695 @@ namespace wwi_app.Controllers
 {
     public partial class ODataController : Controller
     {
-		ICommand sqlCmd = null;
+        private readonly NpgsqlDataSource _db;
 
-        public ODataController(ICommand sqlCommandService)
+        public ODataController(NpgsqlDataSource db)
         {
-			this.sqlCmd = sqlCommandService;
+            _db = db;
         }
 
+        private int CurrentUserId() =>
+            Convert.ToInt32(User.FindFirst(ClaimTypes.Sid)?.Value ?? "0");
 
-		TableSpec salesorders = new TableSpec("WebApi","SalesOrders", "OrderID,OrderDate,CustomerPurchaseOrderNumber,ExpectedDeliveryDate,PickingCompletedWhen,CustomerID,CustomerName,PhoneNumber,FaxNumber,WebsiteURL,DeliveryLocation,SalesPerson,SalesPersonPhone,SalesPersonEmail");
+        private async Task WriteTableJson(string sql, object? param = null)
+        {
+            await using var conn = await _db.OpenConnectionAsync();
+            var rows = await conn.QueryAsync(sql, param);
+            Response.ContentType = "application/json";
+            await Response.WriteAsync(JsonConvert.SerializeObject(new { value = rows }));
+        }
 
-		[HttpGet]
+        private async Task ExecFunction(string sql, object param)
+        {
+            await using var conn = await _db.OpenConnectionAsync();
+            await conn.ExecuteAsync(sql, param);
+        }
+
+        // ── SalesOrders ──────────────────────────────────────────────────────────
+
+        [HttpGet]
         public async Task SalesOrders(int? id)
         {
-			await this.OData(salesorders, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT OrderID,OrderDate,CustomerPurchaseOrderNumber,ExpectedDeliveryDate,PickingCompletedWhen,CustomerID,CustomerName,PhoneNumber,FaxNumber,WebsiteURL,DeliveryLocation,SalesPerson,SalesPersonPhone,SalesPersonEmail FROM webapi.sales_orders WHERE OrderID = @id", new { id });
+            else
+                await WriteTableJson("SELECT OrderID,OrderDate,CustomerPurchaseOrderNumber,ExpectedDeliveryDate,PickingCompletedWhen,CustomerID,CustomerName,PhoneNumber,FaxNumber,WebsiteURL,DeliveryLocation,SalesPerson,SalesPersonPhone,SalesPersonEmail FROM webapi.sales_orders");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task SalesOrders(int id, string body)
         {
-            var SalesOrder = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateSalesOrderFromJson @SalesOrder, @SalesOrderID = {id}, @UserID = @UserID")
-				.Param("SalesOrder", SalesOrder)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_sales_order_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task SalesOrders()
         {
-            var SalesOrders = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertSalesOrdersFromJson @SalesOrders, @UserID = @UserID")
-				.Param("SalesOrders", SalesOrders)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_sales_orders_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task SalesOrders(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteSalesOrder @SalesOrderID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task SalesOrders(int id) =>
+            await ExecFunction("SELECT webapi.delete_sales_order(@id)", new { id });
 
+        // ── SalesOrderLines ──────────────────────────────────────────────────────
 
-		TableSpec salesorderlines = new TableSpec("WebApi","SalesOrderLines", "OrderLineID,OrderID,Description,Quantity,UnitPrice,TaxRate,ProductName,Brand,Size,ColorName,PackageTypeName,PickingCompletedWhen");
-
-		[HttpGet]
+        [HttpGet]
         public async Task SalesOrderLines(int? id)
         {
-			await this.OData(salesorderlines, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT OrderLineID,OrderID,Description,Quantity,UnitPrice,TaxRate,ProductName,Brand,Size,ColorName,PackageTypeName,PickingCompletedWhen FROM webapi.sales_order_lines WHERE OrderLineID = @id", new { id });
+            else
+                await WriteTableJson("SELECT OrderLineID,OrderID,Description,Quantity,UnitPrice,TaxRate,ProductName,Brand,Size,ColorName,PackageTypeName,PickingCompletedWhen FROM webapi.sales_order_lines");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task SalesOrderLines(int id, string body)
         {
-            var SalesOrderLine = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateSalesOrderLineFromJson @SalesOrderLine, @SalesOrderLineID = {id}, @UserID = @UserID")
-				.Param("SalesOrderLine", SalesOrderLine)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_sales_order_line_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task SalesOrderLines()
         {
-            var SalesOrderLines = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertSalesOrderLinesFromJson @SalesOrderLines, @UserID = @UserID")
-				.Param("SalesOrderLines", SalesOrderLines)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_sales_order_lines_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task SalesOrderLines(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteSalesOrderLine @SalesOrderLineID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task SalesOrderLines(int id) =>
+            await ExecFunction("SELECT webapi.delete_sales_order_line(@id)", new { id });
 
+        // ── PurchaseOrders ───────────────────────────────────────────────────────
 
-		TableSpec purchaseorders = new TableSpec("WebApi","PurchaseOrders", "PurchaseOrderID,OrderDate,ExpectedDeliveryDate,SupplierReference,IsOrderFinalized,DeliveryMethodName,ContactName,ContactPhone,ContactFax,ContactEmail,SupplierID");
-
-		[HttpGet]
+        [HttpGet]
         public async Task PurchaseOrders(int? id)
         {
-			await this.OData(purchaseorders, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT PurchaseOrderID,OrderDate,ExpectedDeliveryDate,SupplierReference,IsOrderFinalized,DeliveryMethodName,ContactName,ContactPhone,ContactFax,ContactEmail,SupplierID FROM webapi.purchase_orders WHERE PurchaseOrderID = @id", new { id });
+            else
+                await WriteTableJson("SELECT PurchaseOrderID,OrderDate,ExpectedDeliveryDate,SupplierReference,IsOrderFinalized,DeliveryMethodName,ContactName,ContactPhone,ContactFax,ContactEmail,SupplierID FROM webapi.purchase_orders");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task PurchaseOrders(int id, string body)
         {
-            var PurchaseOrder = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdatePurchaseOrderFromJson @PurchaseOrder, @PurchaseOrderID = {id}, @UserID = @UserID")
-				.Param("PurchaseOrder", PurchaseOrder)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_purchase_order_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task PurchaseOrders()
         {
-            var PurchaseOrders = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertPurchaseOrdersFromJson @PurchaseOrders, @UserID = @UserID")
-				.Param("PurchaseOrders", PurchaseOrders)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_purchase_orders_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task PurchaseOrders(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeletePurchaseOrder @PurchaseOrderID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task PurchaseOrders(int id) =>
+            await ExecFunction("SELECT webapi.delete_purchase_order(@id)", new { id });
 
+        // ── PurchaseOrderLines ───────────────────────────────────────────────────
 
-		TableSpec purchaseorderlines = new TableSpec("WebApi","PurchaseOrderLines", "PurchaseOrderLineID,PurchaseOrderID,Description,IsOrderLineFinalized,ProductName,Brand,Size,ColorName,PackageTypeName,OrderedOuters,ReceivedOuters,ExpectedUnitPricePerOuter");
-
-		[HttpGet]
+        [HttpGet]
         public async Task PurchaseOrderLines(int? id)
         {
-			await this.OData(purchaseorderlines, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT PurchaseOrderLineID,PurchaseOrderID,Description,IsOrderLineFinalized,ProductName,Brand,Size,ColorName,PackageTypeName,OrderedOuters,ReceivedOuters,ExpectedUnitPricePerOuter FROM webapi.purchase_order_lines WHERE PurchaseOrderLineID = @id", new { id });
+            else
+                await WriteTableJson("SELECT PurchaseOrderLineID,PurchaseOrderID,Description,IsOrderLineFinalized,ProductName,Brand,Size,ColorName,PackageTypeName,OrderedOuters,ReceivedOuters,ExpectedUnitPricePerOuter FROM webapi.purchase_order_lines");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task PurchaseOrderLines(int id, string body)
         {
-            var PurchaseOrderLine = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdatePurchaseOrderLineFromJson @PurchaseOrderLine, @PurchaseOrderLineID = {id}, @UserID = @UserID")
-				.Param("PurchaseOrderLine", PurchaseOrderLine)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_purchase_order_line_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task PurchaseOrderLines()
         {
-            var PurchaseOrderLines = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertPurchaseOrderLinesFromJson @PurchaseOrderLines, @UserID = @UserID")
-				.Param("PurchaseOrderLines", PurchaseOrderLines)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_purchase_order_lines_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task PurchaseOrderLines(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeletePurchaseOrderLine @PurchaseOrderLineID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task PurchaseOrderLines(int id) =>
+            await ExecFunction("SELECT webapi.delete_purchase_order_line(@id)", new { id });
 
+        // ── Invoices ─────────────────────────────────────────────────────────────
 
-		TableSpec invoices = new TableSpec("WebApi","Invoices", "InvoiceID,InvoiceDate,CustomerPurchaseOrderNumber,IsCreditNote,TotalDryItems,TotalChillerItems,DeliveryRun,RunPosition,ReturnedDeliveryData,ConfirmedDeliveryTime,ConfirmedReceivedBy,CustomerName,SalesPersonName,ContactName,ContactPhone,ContactEmail,SalesPersonEmail,DeliveryMethodName,CustomerID,OrderID,DeliveryMethodID,ContactPersonID,AccountsPersonID,SalespersonPersonID,PackedByPersonID");
-
-		[HttpGet]
+        [HttpGet]
         public async Task Invoices(int? id)
         {
-			await this.OData(invoices, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT InvoiceID,InvoiceDate,CustomerPurchaseOrderNumber,IsCreditNote,TotalDryItems,TotalChillerItems,DeliveryRun,RunPosition,ReturnedDeliveryData,ConfirmedDeliveryTime,ConfirmedReceivedBy,CustomerName,SalesPersonName,ContactName,ContactPhone,ContactEmail,SalesPersonEmail,DeliveryMethodName,CustomerID,OrderID,DeliveryMethodID,ContactPersonID,AccountsPersonID,SalespersonPersonID,PackedByPersonID FROM webapi.invoices WHERE InvoiceID = @id", new { id });
+            else
+                await WriteTableJson("SELECT InvoiceID,InvoiceDate,CustomerPurchaseOrderNumber,IsCreditNote,TotalDryItems,TotalChillerItems,DeliveryRun,RunPosition,ReturnedDeliveryData,ConfirmedDeliveryTime,ConfirmedReceivedBy,CustomerName,SalesPersonName,ContactName,ContactPhone,ContactEmail,SalesPersonEmail,DeliveryMethodName,CustomerID,OrderID,DeliveryMethodID,ContactPersonID,AccountsPersonID,SalespersonPersonID,PackedByPersonID FROM webapi.invoices");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task Invoices(int id, string body)
         {
-            var Invoice = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateInvoiceFromJson @Invoice, @InvoiceID = {id}, @UserID = @UserID")
-				.Param("Invoice", Invoice)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_invoice_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task Invoices()
         {
-            var Invoices = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertInvoicesFromJson @Invoices, @UserID = @UserID")
-				.Param("Invoices", Invoices)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_invoices_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task Invoices(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteInvoice @InvoiceID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task Invoices(int id) =>
+            await ExecFunction("SELECT webapi.delete_invoice(@id)", new { id });
 
+        // ── SpecialDeals ─────────────────────────────────────────────────────────
 
-		TableSpec specialdeals = new TableSpec("WebApi","SpecialDeals", "SpecialDealID,DealDescription,StartDate,EndDate,DiscountAmount,DiscountPercentage,UnitPrice,StockItemName,Brand,Size,CustomerName,BuyingGroupName,CustomerCategoryName,StockItemID,CustomerID,BuyingGroupID,CustomerCategoryID,StockGroupID");
-
-		[HttpGet]
+        [HttpGet]
         public async Task SpecialDeals(int? id)
         {
-			await this.OData(specialdeals, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT SpecialDealID,DealDescription,StartDate,EndDate,DiscountAmount,DiscountPercentage,UnitPrice,StockItemName,Brand,Size,CustomerName,BuyingGroupName,CustomerCategoryName,StockItemID,CustomerID,BuyingGroupID,CustomerCategoryID,StockGroupID FROM webapi.special_deals WHERE SpecialDealID = @id", new { id });
+            else
+                await WriteTableJson("SELECT SpecialDealID,DealDescription,StartDate,EndDate,DiscountAmount,DiscountPercentage,UnitPrice,StockItemName,Brand,Size,CustomerName,BuyingGroupName,CustomerCategoryName,StockItemID,CustomerID,BuyingGroupID,CustomerCategoryID,StockGroupID FROM webapi.special_deals");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task SpecialDeals(int id, string body)
         {
-            var SpecialDeal = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateSpecialDealFromJson @SpecialDeal, @SpecialDealID = {id}, @UserID = @UserID")
-				.Param("SpecialDeal", SpecialDeal)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_special_deal_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task SpecialDeals()
         {
-            var SpecialDeals = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertSpecialDealsFromJson @SpecialDeals, @UserID = @UserID")
-				.Param("SpecialDeals", SpecialDeals)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_special_deals_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task SpecialDeals(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteSpecialDeal @SpecialDealID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task SpecialDeals(int id) =>
+            await ExecFunction("SELECT webapi.delete_special_deal(@id)", new { id });
 
+        // ── CustomerTransactions ─────────────────────────────────────────────────
 
-		TableSpec customertransactions = new TableSpec("WebApi","CustomerTransactions", "CustomerTransactionID,TransactionDate,AmountExcludingTax,TaxAmount,TransactionAmount,OutstandingBalance,FinalizationDate,IsFinalized,CustomerName,TransactionTypeName,InvoiceDate,CustomerPurchaseOrderNumber,PaymentMethodName,CustomerID,TransactionTypeID,InvoiceID,PaymentMethodID");
-
-		[HttpGet]
+        [HttpGet]
         public async Task CustomerTransactions(int? id)
         {
-			await this.OData(customertransactions, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT CustomerTransactionID,TransactionDate,AmountExcludingTax,TaxAmount,TransactionAmount,OutstandingBalance,FinalizationDate,IsFinalized,CustomerName,TransactionTypeName,InvoiceDate,CustomerPurchaseOrderNumber,PaymentMethodName,CustomerID,TransactionTypeID,InvoiceID,PaymentMethodID FROM webapi.customer_transactions WHERE CustomerTransactionID = @id", new { id });
+            else
+                await WriteTableJson("SELECT CustomerTransactionID,TransactionDate,AmountExcludingTax,TaxAmount,TransactionAmount,OutstandingBalance,FinalizationDate,IsFinalized,CustomerName,TransactionTypeName,InvoiceDate,CustomerPurchaseOrderNumber,PaymentMethodName,CustomerID,TransactionTypeID,InvoiceID,PaymentMethodID FROM webapi.customer_transactions");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task CustomerTransactions(int id, string body)
         {
-            var CustomerTransaction = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateCustomerTransactionFromJson @CustomerTransaction, @CustomerTransactionID = {id}, @UserID = @UserID")
-				.Param("CustomerTransaction", CustomerTransaction)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_customer_transaction_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task CustomerTransactions()
         {
-            var CustomerTransactions = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertCustomerTransactionsFromJson @CustomerTransactions, @UserID = @UserID")
-				.Param("CustomerTransactions", CustomerTransactions)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_customer_transactions_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task CustomerTransactions(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteCustomerTransaction @CustomerTransactionID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task CustomerTransactions(int id) =>
+            await ExecFunction("SELECT webapi.delete_customer_transaction(@id)", new { id });
 
+        // ── SupplierTransactions ─────────────────────────────────────────────────
 
-		TableSpec suppliertransactions = new TableSpec("WebApi","SupplierTransactions", "SupplierTransactionID,TransactionDate,AmountExcludingTax,TaxAmount,TransactionAmount,OutstandingBalance,FinalizationDate,IsFinalized,SupplierName,TransactionTypeName,PaymentMethodName,SupplierID,TransactionTypeID,PurchaseOrderID,PaymentMethodID,OrderDate,IsOrderFinalized,ExpectedDeliveryDate,SupplierReference");
-
-		[HttpGet]
+        [HttpGet]
         public async Task SupplierTransactions(int? id)
         {
-			await this.OData(suppliertransactions, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT SupplierTransactionID,TransactionDate,AmountExcludingTax,TaxAmount,TransactionAmount,OutstandingBalance,FinalizationDate,IsFinalized,SupplierName,TransactionTypeName,PaymentMethodName,SupplierID,TransactionTypeID,PurchaseOrderID,PaymentMethodID,OrderDate,IsOrderFinalized,ExpectedDeliveryDate,SupplierReference FROM webapi.supplier_transactions WHERE SupplierTransactionID = @id", new { id });
+            else
+                await WriteTableJson("SELECT SupplierTransactionID,TransactionDate,AmountExcludingTax,TaxAmount,TransactionAmount,OutstandingBalance,FinalizationDate,IsFinalized,SupplierName,TransactionTypeName,PaymentMethodName,SupplierID,TransactionTypeID,PurchaseOrderID,PaymentMethodID,OrderDate,IsOrderFinalized,ExpectedDeliveryDate,SupplierReference FROM webapi.supplier_transactions");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task SupplierTransactions(int id, string body)
         {
-            var SupplierTransaction = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateSupplierTransactionFromJson @SupplierTransaction, @SupplierTransactionID = {id}, @UserID = @UserID")
-				.Param("SupplierTransaction", SupplierTransaction)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_supplier_transaction_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task SupplierTransactions()
         {
-            var SupplierTransactions = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertSupplierTransactionsFromJson @SupplierTransactions, @UserID = @UserID")
-				.Param("SupplierTransactions", SupplierTransactions)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_supplier_transactions_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task SupplierTransactions(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteSupplierTransaction @SupplierTransactionID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task SupplierTransactions(int id) =>
+            await ExecFunction("SELECT webapi.delete_supplier_transaction(@id)", new { id });
 
+        // ── Customers ────────────────────────────────────────────────────────────
 
-		TableSpec customers = new TableSpec("WebApi","Customers", "CustomerID,CustomerName,AccountOpenedDate,CustomerCategoryName,PrimaryContact,AlternateContact,PhoneNumber,FaxNumber,WebsiteURL,PostalAddressLine1,PostalAddressLine2,PostalCity,PostalCityID,PostalPostalCode,CreditLimit,IsOnCreditHold,IsStatementSent,PaymentDays,RunPosition,StandardDiscountPercentage,BuyingGroupName,DeliveryLocation,BuyingGroupID,BillToCustomerID,CustomerCategoryID,PrimaryContactPersonID,AlternateContactPersonID");
-
-		[HttpGet]
+        [HttpGet]
         public async Task Customers(int? id)
         {
-			await this.OData(customers, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT CustomerID,CustomerName,AccountOpenedDate,CustomerCategoryName,PrimaryContact,AlternateContact,PhoneNumber,FaxNumber,WebsiteURL,PostalAddressLine1,PostalAddressLine2,PostalCity,PostalCityID,PostalPostalCode,CreditLimit,IsOnCreditHold,IsStatementSent,PaymentDays,RunPosition,StandardDiscountPercentage,BuyingGroupName,DeliveryLocation,BuyingGroupID,BillToCustomerID,CustomerCategoryID,PrimaryContactPersonID,AlternateContactPersonID FROM webapi.customers WHERE CustomerID = @id", new { id });
+            else
+                await WriteTableJson("SELECT CustomerID,CustomerName,AccountOpenedDate,CustomerCategoryName,PrimaryContact,AlternateContact,PhoneNumber,FaxNumber,WebsiteURL,PostalAddressLine1,PostalAddressLine2,PostalCity,PostalCityID,PostalPostalCode,CreditLimit,IsOnCreditHold,IsStatementSent,PaymentDays,RunPosition,StandardDiscountPercentage,BuyingGroupName,DeliveryLocation,BuyingGroupID,BillToCustomerID,CustomerCategoryID,PrimaryContactPersonID,AlternateContactPersonID FROM webapi.customers");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task Customers(int id, string body)
         {
-            var Customer = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateCustomerFromJson @Customer, @CustomerID = {id}, @UserID = @UserID")
-				.Param("Customer", Customer)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_customer_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task Customers()
         {
-            var Customers = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertCustomersFromJson @Customers, @UserID = @UserID")
-				.Param("Customers", Customers)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_customers_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task Customers(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteCustomer @CustomerID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task Customers(int id) =>
+            await ExecFunction("SELECT webapi.delete_customer(@id)", new { id });
 
+        // ── Suppliers ────────────────────────────────────────────────────────────
 
-		TableSpec suppliers = new TableSpec("WebApi","Suppliers", "SupplierID,SupplierName,SupplierCategoryName,PrimaryContact,AlternateContact,PhoneNumber,FaxNumber,WebsiteURL,SupplierReference,DeliveryLocation,BankAccountName,BankAccountBranch,BankAccountCode,BankAccountNumber,BankInternationalCode,PostalAddressLine1,PostalAddressLine2,PostalPostalCode,PaymentDays,SupplierCategoryID");
-
-		[HttpGet]
+        [HttpGet]
         public async Task Suppliers(int? id)
         {
-			await this.OData(suppliers, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT SupplierID,SupplierName,SupplierCategoryName,PrimaryContact,AlternateContact,PhoneNumber,FaxNumber,WebsiteURL,SupplierReference,DeliveryLocation,BankAccountName,BankAccountBranch,BankAccountCode,BankAccountNumber,BankInternationalCode,PostalAddressLine1,PostalAddressLine2,PostalPostalCode,PaymentDays,SupplierCategoryID FROM webapi.suppliers WHERE SupplierID = @id", new { id });
+            else
+                await WriteTableJson("SELECT SupplierID,SupplierName,SupplierCategoryName,PrimaryContact,AlternateContact,PhoneNumber,FaxNumber,WebsiteURL,SupplierReference,DeliveryLocation,BankAccountName,BankAccountBranch,BankAccountCode,BankAccountNumber,BankInternationalCode,PostalAddressLine1,PostalAddressLine2,PostalPostalCode,PaymentDays,SupplierCategoryID FROM webapi.suppliers");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task Suppliers(int id, string body)
         {
-            var Supplier = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateSupplierFromJson @Supplier, @SupplierID = {id}, @UserID = @UserID")
-				.Param("Supplier", Supplier)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_supplier_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task Suppliers()
         {
-            var Suppliers = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertSuppliersFromJson @Suppliers, @UserID = @UserID")
-				.Param("Suppliers", Suppliers)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_suppliers_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task Suppliers(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteSupplier @SupplierID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task Suppliers(int id) =>
+            await ExecFunction("SELECT webapi.delete_supplier(@id)", new { id });
 
+        // ── Countries ────────────────────────────────────────────────────────────
 
-		TableSpec countries = new TableSpec("WebApi","Countries", "CountryID,CountryName,FormalName,IsoAlpha3Code,IsoNumericCode,CountryType,LatestRecordedPopulation,Continent,Region,Subregion");
-
-		[HttpGet]
+        [HttpGet]
         public async Task Countries(int? id)
         {
-			await this.OData(countries, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT CountryID,CountryName,FormalName,IsoAlpha3Code,IsoNumericCode,CountryType,LatestRecordedPopulation,Continent,Region,Subregion FROM webapi.countries WHERE CountryID = @id", new { id });
+            else
+                await WriteTableJson("SELECT CountryID,CountryName,FormalName,IsoAlpha3Code,IsoNumericCode,CountryType,LatestRecordedPopulation,Continent,Region,Subregion FROM webapi.countries");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task Countries(int id, string body)
         {
-            var Country = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateCountryFromJson @Country, @CountryID = {id}, @UserID = @UserID")
-				.Param("Country", Country)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_country_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task Countries()
         {
-            var Countries = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertCountriesFromJson @Countries, @UserID = @UserID")
-				.Param("Countries", Countries)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_countries_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task Countries(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteCountry @CountryID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task Countries(int id) =>
+            await ExecFunction("SELECT webapi.delete_country(@id)", new { id });
 
+        // ── Cities ───────────────────────────────────────────────────────────────
 
-		TableSpec cities = new TableSpec("WebApi","Cities", "CityID,CityName,StateProvinceID,LatestRecordedPopulation");
-
-		[HttpGet]
+        [HttpGet]
         public async Task Cities(int? id)
         {
-			await this.OData(cities, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT CityID,CityName,StateProvinceID,LatestRecordedPopulation FROM webapi.cities WHERE CityID = @id", new { id });
+            else
+                await WriteTableJson("SELECT CityID,CityName,StateProvinceID,LatestRecordedPopulation FROM webapi.cities");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task Cities(int id, string body)
         {
-            var City = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateCityFromJson @City, @CityID = {id}, @UserID = @UserID")
-				.Param("City", City)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_city_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task Cities()
         {
-            var Cities = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertCitiesFromJson @Cities, @UserID = @UserID")
-				.Param("Cities", Cities)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_cities_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task Cities(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteCity @CityID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task Cities(int id) =>
+            await ExecFunction("SELECT webapi.delete_city(@id)", new { id });
 
+        // ── StateProvinces ───────────────────────────────────────────────────────
 
-		TableSpec stateprovinces = new TableSpec("WebApi","StateProvinces", "StateProvinceID,StateProvinceCode,StateProvinceName,CountryID,SalesTerritory,LatestRecordedPopulation");
-
-		[HttpGet]
+        [HttpGet]
         public async Task StateProvinces(int? id)
         {
-			await this.OData(stateprovinces, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT StateProvinceID,StateProvinceCode,StateProvinceName,CountryID,SalesTerritory,LatestRecordedPopulation FROM webapi.state_provinces WHERE StateProvinceID = @id", new { id });
+            else
+                await WriteTableJson("SELECT StateProvinceID,StateProvinceCode,StateProvinceName,CountryID,SalesTerritory,LatestRecordedPopulation FROM webapi.state_provinces");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task StateProvinces(int id, string body)
         {
-            var StateProvince = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateStateProvinceFromJson @StateProvince, @StateProvinceID = {id}, @UserID = @UserID")
-				.Param("StateProvince", StateProvince)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_state_province_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task StateProvinces()
         {
-            var StateProvinces = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertStateProvincesFromJson @StateProvinces, @UserID = @UserID")
-				.Param("StateProvinces", StateProvinces)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_state_provinces_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task StateProvinces(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteStateProvince @StateProvinceID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task StateProvinces(int id) =>
+            await ExecFunction("SELECT webapi.delete_state_province(@id)", new { id });
 
+        // ── StockItems ───────────────────────────────────────────────────────────
 
-		TableSpec stockitems = new TableSpec("WebApi","StockItems", "StockItemID,StockItemName,SupplierName,SupplierReference,ColorName,OuterPackage,UnitPackage,Brand,Size,LeadTimeDays,QuantityPerOuter,IsChillerStock,Barcode,TaxRate,UnitPrice,RecommendedRetailPrice,TypicalWeightPerUnit,MarketingComments,InternalComments,CustomFields,QuantityOnHand,BinLocation,LastStocktakeQuantity,LastCostPrice,ReorderLevel,TargetStockLevel,SupplierID,ColorID,UnitPackageID,OuterPackageID");
-
-		[HttpGet]
+        [HttpGet]
         public async Task StockItems(int? id)
         {
-			await this.OData(stockitems, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT StockItemID,StockItemName,SupplierName,SupplierReference,ColorName,OuterPackage,UnitPackage,Brand,Size,LeadTimeDays,QuantityPerOuter,IsChillerStock,Barcode,TaxRate,UnitPrice,RecommendedRetailPrice,TypicalWeightPerUnit,MarketingComments,InternalComments,CustomFields,QuantityOnHand,BinLocation,LastStocktakeQuantity,LastCostPrice,ReorderLevel,TargetStockLevel,SupplierID,ColorID,UnitPackageID,OuterPackageID FROM webapi.stock_items WHERE StockItemID = @id", new { id });
+            else
+                await WriteTableJson("SELECT StockItemID,StockItemName,SupplierName,SupplierReference,ColorName,OuterPackage,UnitPackage,Brand,Size,LeadTimeDays,QuantityPerOuter,IsChillerStock,Barcode,TaxRate,UnitPrice,RecommendedRetailPrice,TypicalWeightPerUnit,MarketingComments,InternalComments,CustomFields,QuantityOnHand,BinLocation,LastStocktakeQuantity,LastCostPrice,ReorderLevel,TargetStockLevel,SupplierID,ColorID,UnitPackageID,OuterPackageID FROM webapi.stock_items");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task StockItems(int id, string body)
         {
-            var StockItem = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateStockItemFromJson @StockItem, @StockItemID = {id}, @UserID = @UserID")
-				.Param("StockItem", StockItem)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_stock_item_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task StockItems()
         {
-            var StockItems = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertStockItemsFromJson @StockItems, @UserID = @UserID")
-				.Param("StockItems", StockItems)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_stock_items_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task StockItems(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteStockItem @StockItemID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task StockItems(int id) =>
+            await ExecFunction("SELECT webapi.delete_stock_item(@id)", new { id });
 
+        // ── PackageTypes ─────────────────────────────────────────────────────────
 
-		TableSpec packagetypes = new TableSpec("WebApi","PackageTypes", "PackageTypeID,PackageTypeName");
-
-		[HttpGet]
+        [HttpGet]
         public async Task PackageTypes(int? id)
         {
-			await this.OData(packagetypes, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT PackageTypeID,PackageTypeName FROM webapi.package_types WHERE PackageTypeID = @id", new { id });
+            else
+                await WriteTableJson("SELECT PackageTypeID,PackageTypeName FROM webapi.package_types");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task PackageTypes(int id, string body)
         {
-            var PackageType = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdatePackageTypeFromJson @PackageType, @PackageTypeID = {id}, @UserID = @UserID")
-				.Param("PackageType", PackageType)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_package_type_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task PackageTypes()
         {
-            var PackageTypes = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertPackageTypesFromJson @PackageTypes, @UserID = @UserID")
-				.Param("PackageTypes", PackageTypes)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_package_types_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task PackageTypes(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeletePackageType @PackageTypeID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task PackageTypes(int id) =>
+            await ExecFunction("SELECT webapi.delete_package_type(@id)", new { id });
 
+        // ── Colors ───────────────────────────────────────────────────────────────
 
-		TableSpec colors = new TableSpec("WebApi","Colors", "ColorID,ColorName");
-
-		[HttpGet]
+        [HttpGet]
         public async Task Colors(int? id)
         {
-			await this.OData(colors, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT ColorID,ColorName FROM webapi.colors WHERE ColorID = @id", new { id });
+            else
+                await WriteTableJson("SELECT ColorID,ColorName FROM webapi.colors");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task Colors(int id, string body)
         {
-            var Color = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateColorFromJson @Color, @ColorID = {id}, @UserID = @UserID")
-				.Param("Color", Color)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_color_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task Colors()
         {
-            var Colors = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertColorsFromJson @Colors, @UserID = @UserID")
-				.Param("Colors", Colors)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_colors_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task Colors(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteColor @ColorID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task Colors(int id) =>
+            await ExecFunction("SELECT webapi.delete_color(@id)", new { id });
 
+        // ── StockGroups ──────────────────────────────────────────────────────────
 
-		TableSpec stockgroups = new TableSpec("WebApi","StockGroups", "StockGroupID,StockGroupName");
-
-		[HttpGet]
+        [HttpGet]
         public async Task StockGroups(int? id)
         {
-			await this.OData(stockgroups, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT StockGroupID,StockGroupName FROM webapi.stock_groups WHERE StockGroupID = @id", new { id });
+            else
+                await WriteTableJson("SELECT StockGroupID,StockGroupName FROM webapi.stock_groups");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task StockGroups(int id, string body)
         {
-            var StockGroup = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateStockGroupFromJson @StockGroup, @StockGroupID = {id}, @UserID = @UserID")
-				.Param("StockGroup", StockGroup)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_stock_group_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task StockGroups()
         {
-            var StockGroups = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertStockGroupsFromJson @StockGroups, @UserID = @UserID")
-				.Param("StockGroups", StockGroups)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_stock_groups_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task StockGroups(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteStockGroup @StockGroupID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task StockGroups(int id) =>
+            await ExecFunction("SELECT webapi.delete_stock_group(@id)", new { id });
 
+        // ── BuyingGroups ─────────────────────────────────────────────────────────
 
-		TableSpec buyinggroups = new TableSpec("WebApi","BuyingGroups", "BuyingGroupID,BuyingGroupName");
-
-		[HttpGet]
+        [HttpGet]
         public async Task BuyingGroups(int? id)
         {
-			await this.OData(buyinggroups, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT BuyingGroupID,BuyingGroupName FROM webapi.buying_groups WHERE BuyingGroupID = @id", new { id });
+            else
+                await WriteTableJson("SELECT BuyingGroupID,BuyingGroupName FROM webapi.buying_groups");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task BuyingGroups(int id, string body)
         {
-            var BuyingGroup = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateBuyingGroupFromJson @BuyingGroup, @BuyingGroupID = {id}, @UserID = @UserID")
-				.Param("BuyingGroup", BuyingGroup)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_buying_group_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task BuyingGroups()
         {
-            var BuyingGroups = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertBuyingGroupsFromJson @BuyingGroups, @UserID = @UserID")
-				.Param("BuyingGroups", BuyingGroups)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_buying_groups_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task BuyingGroups(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteBuyingGroup @BuyingGroupID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task BuyingGroups(int id) =>
+            await ExecFunction("SELECT webapi.delete_buying_group(@id)", new { id });
 
+        // ── CustomerCategories ───────────────────────────────────────────────────
 
-		TableSpec customercategories = new TableSpec("WebApi","CustomerCategories", "CustomerCategoryID,CustomerCategoryName");
-
-		[HttpGet]
+        [HttpGet]
         public async Task CustomerCategories(int? id)
         {
-			await this.OData(customercategories, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT CustomerCategoryID,CustomerCategoryName FROM webapi.customer_categories WHERE CustomerCategoryID = @id", new { id });
+            else
+                await WriteTableJson("SELECT CustomerCategoryID,CustomerCategoryName FROM webapi.customer_categories");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task CustomerCategories(int id, string body)
         {
-            var CustomerCategory = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateCustomerCategoryFromJson @CustomerCategory, @CustomerCategoryID = {id}, @UserID = @UserID")
-				.Param("CustomerCategory", CustomerCategory)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_customer_category_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task CustomerCategories()
         {
-            var CustomerCategories = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertCustomerCategoriesFromJson @CustomerCategories, @UserID = @UserID")
-				.Param("CustomerCategories", CustomerCategories)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_customer_categories_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task CustomerCategories(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteCustomerCategory @CustomerCategoryID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task CustomerCategories(int id) =>
+            await ExecFunction("SELECT webapi.delete_customer_category(@id)", new { id });
 
+        // ── SupplierCategories ───────────────────────────────────────────────────
 
-		TableSpec suppliercategories = new TableSpec("WebApi","SupplierCategories", "SupplierCategoryID,SupplierCategoryName");
-
-		[HttpGet]
+        [HttpGet]
         public async Task SupplierCategories(int? id)
         {
-			await this.OData(suppliercategories, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT SupplierCategoryID,SupplierCategoryName FROM webapi.supplier_categories WHERE SupplierCategoryID = @id", new { id });
+            else
+                await WriteTableJson("SELECT SupplierCategoryID,SupplierCategoryName FROM webapi.supplier_categories");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task SupplierCategories(int id, string body)
         {
-            var SupplierCategory = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateSupplierCategoryFromJson @SupplierCategory, @SupplierCategoryID = {id}, @UserID = @UserID")
-				.Param("SupplierCategory", SupplierCategory)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_supplier_category_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task SupplierCategories()
         {
-            var SupplierCategories = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertSupplierCategoriesFromJson @SupplierCategories, @UserID = @UserID")
-				.Param("SupplierCategories", SupplierCategories)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_supplier_categories_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task SupplierCategories(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteSupplierCategory @SupplierCategoryID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task SupplierCategories(int id) =>
+            await ExecFunction("SELECT webapi.delete_supplier_category(@id)", new { id });
 
+        // ── TransactionTypes ─────────────────────────────────────────────────────
 
-		TableSpec transactiontypes = new TableSpec("WebApi","TransactionTypes", "TransactionTypeID,TransactionTypeName");
-
-		[HttpGet]
+        [HttpGet]
         public async Task TransactionTypes(int? id)
         {
-			await this.OData(transactiontypes, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT TransactionTypeID,TransactionTypeName FROM webapi.transaction_types WHERE TransactionTypeID = @id", new { id });
+            else
+                await WriteTableJson("SELECT TransactionTypeID,TransactionTypeName FROM webapi.transaction_types");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task TransactionTypes(int id, string body)
         {
-            var TransactionType = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateTransactionTypeFromJson @TransactionType, @TransactionTypeID = {id}, @UserID = @UserID")
-				.Param("TransactionType", TransactionType)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_transaction_type_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task TransactionTypes()
         {
-            var TransactionTypes = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertTransactionTypesFromJson @TransactionTypes, @UserID = @UserID")
-				.Param("TransactionTypes", TransactionTypes)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_transaction_types_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task TransactionTypes(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteTransactionType @TransactionTypeID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task TransactionTypes(int id) =>
+            await ExecFunction("SELECT webapi.delete_transaction_type(@id)", new { id });
 
+        // ── PaymentMethods ───────────────────────────────────────────────────────
 
-		TableSpec paymentmethods = new TableSpec("WebApi","PaymentMethods", "PaymentMethodID,PaymentMethodName");
-
-		[HttpGet]
+        [HttpGet]
         public async Task PaymentMethods(int? id)
         {
-			await this.OData(paymentmethods, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT PaymentMethodID,PaymentMethodName FROM webapi.payment_methods WHERE PaymentMethodID = @id", new { id });
+            else
+                await WriteTableJson("SELECT PaymentMethodID,PaymentMethodName FROM webapi.payment_methods");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task PaymentMethods(int id, string body)
         {
-            var PaymentMethod = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdatePaymentMethodFromJson @PaymentMethod, @PaymentMethodID = {id}, @UserID = @UserID")
-				.Param("PaymentMethod", PaymentMethod)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_payment_method_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task PaymentMethods()
         {
-            var PaymentMethods = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertPaymentMethodsFromJson @PaymentMethods, @UserID = @UserID")
-				.Param("PaymentMethods", PaymentMethods)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_payment_methods_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task PaymentMethods(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeletePaymentMethod @PaymentMethodID = {id}").Exec();
-        }
+        [Authorize, HttpDelete]
+        public async Task PaymentMethods(int id) =>
+            await ExecFunction("SELECT webapi.delete_payment_method(@id)", new { id });
 
+        // ── DeliveryMethods ──────────────────────────────────────────────────────
 
-		TableSpec deliverymethods = new TableSpec("WebApi","DeliveryMethods", "DeliveryMethodID,DeliveryMethodName");
-
-		[HttpGet]
+        [HttpGet]
         public async Task DeliveryMethods(int? id)
         {
-			await this.OData(deliverymethods, id: id).Process(this.sqlCmd);
+            if (id.HasValue)
+                await WriteTableJson("SELECT DeliveryMethodID,DeliveryMethodName FROM webapi.delivery_methods WHERE DeliveryMethodID = @id", new { id });
+            else
+                await WriteTableJson("SELECT DeliveryMethodID,DeliveryMethodName FROM webapi.delivery_methods");
         }
-		
-        [Authorize]
-		[HttpPut]
+
+        [Authorize, HttpPut]
         public async Task DeliveryMethods(int id, string body)
         {
-            var DeliveryMethod = new StreamReader(Request.Body).ReadToEnd();
-
-			await sqlCmd
-				.Sql($"EXEC WebApi.UpdateDeliveryMethodFromJson @DeliveryMethod, @DeliveryMethodID = {id}, @UserID = @UserID")
-				.Param("DeliveryMethod", DeliveryMethod)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.update_delivery_method_from_json(@json, @eid, @uid)", new { json, eid = id, uid = CurrentUserId() });
         }
 
-        [Authorize]
-        [HttpPost]
+        [Authorize, HttpPost]
         public async Task DeliveryMethods()
         {
-            var DeliveryMethods = new StreamReader(Request.Body).ReadToEnd();
-			await sqlCmd
-				.Sql($"EXEC WebApi.InsertDeliveryMethodsFromJson @DeliveryMethods, @UserID = @UserID")
-				.Param("DeliveryMethods", DeliveryMethods)
-				.Param("UserID", Convert.ToInt32(this.User.FindFirst(ClaimTypes.Sid).Value))
-				.Exec();
+            var json = await new StreamReader(Request.Body).ReadToEndAsync();
+            await ExecFunction("SELECT webapi.insert_delivery_methods_from_json(@json, @uid)", new { json, uid = CurrentUserId() });
         }
 
-		[Authorize]
-        [HttpDelete]
-        public async Task DeliveryMethods(int id)
-        {
-            await this.sqlCmd.Sql($"EXEC WebApi.DeleteDeliveryMethod @DeliveryMethodID = {id}").Exec();
-        }
-
-
-
+        [Authorize, HttpDelete]
+        public async Task DeliveryMethods(int id) =>
+            await ExecFunction("SELECT webapi.delete_delivery_method(@id)", new { id });
     }
 }
-
