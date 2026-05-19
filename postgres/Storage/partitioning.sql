@@ -1,0 +1,76 @@
+-- Converted from: wwi-ssdt/wwi-ssdt/Storage/PF_TransactionDate.sql
+--                 wwi-ssdt/wwi-ssdt/Storage/PF_TransactionDateTime.sql
+--                 wwi-ssdt/wwi-ssdt/Storage/PS_TransactionDate.sql
+--                 wwi-ssdt/wwi-ssdt/Storage/PS_TransactionDateTime.sql
+--
+-- MSSQL partition functions (CREATE PARTITION FUNCTION) and partition schemes
+-- (CREATE PARTITION SCHEME) have no direct PostgreSQL DDL equivalent. In MSSQL these
+-- are schema-level objects that are referenced by table/index definitions. PostgreSQL
+-- uses declarative partitioning, which is defined inline at CREATE TABLE time:
+--
+--   CREATE TABLE parent_table (...) PARTITION BY RANGE (column);
+--   CREATE TABLE child_2013 PARTITION OF parent_table
+--       FOR VALUES FROM ('2013-01-01') TO ('2014-01-01');
+--
+-- No executable DDL is emitted in this file. See partitioning.md for migration guidance.
+-- See also: postgres/Application/Functions/configuration_apply_partitioning.sql
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- PF_TransactionDate  (type: DATE, RANGE RIGHT)
+-- PF_TransactionDateTime  (type: DATETIME → TIMESTAMPTZ in PostgreSQL, RANGE RIGHT)
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- Both partition functions define the same 4 boundaries, producing 5 partitions:
+--
+--   Partition 1 (left of first boundary):  values < '2014-01-01'
+--   Partition 2:  '2014-01-01' <= value < '2015-01-01'
+--   Partition 3:  '2015-01-01' <= value < '2016-01-01'
+--   Partition 4:  '2016-01-01' <= value < '2017-01-01'
+--   Partition 5 (right of last boundary):  value >= '2017-01-01'
+--
+-- PS_TransactionDate and PS_TransactionDateTime map all 5 partitions to [USERDATA].
+-- In PostgreSQL there is no per-partition filegroup assignment; all child tables
+-- inherit the parent's tablespace (or default) unless explicitly overridden.
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- Sample PostgreSQL declarative partitioning for a date-ranged transaction table:
+-- (Uncomment and adapt to the actual target table and column name.)
+-- ─────────────────────────────────────────────────────────────────────────────────────
+--
+-- CREATE TABLE warehouse.stockitemtransactions (
+--     "StockItemTransactionID"  integer NOT NULL,
+--     "StockItemID"             integer NOT NULL,
+--     "TransactionTypeID"       integer NOT NULL,
+--     "CustomerID"              integer,
+--     "InvoiceID"               integer,
+--     "SupplierID"              integer,
+--     "PurchaseOrderID"         integer,
+--     "TransactionOccurredWhen" timestamptz NOT NULL,
+--     "Quantity"                numeric(18,3) NOT NULL,
+--     "LastEditedBy"            integer NOT NULL,
+--     "LastEditedWhen"          timestamptz NOT NULL DEFAULT now()
+-- ) PARTITION BY RANGE ("TransactionOccurredWhen");
+--
+-- -- pre-2014 catch-all (MSSQL partition 1)
+-- CREATE TABLE warehouse.stockitemtransactions_pre2014
+--     PARTITION OF warehouse.stockitemtransactions
+--     FOR VALUES FROM (MINVALUE) TO ('2014-01-01 00:00:00+00');
+--
+-- -- year 2014 (MSSQL partition 2)
+-- CREATE TABLE warehouse.stockitemtransactions_2014
+--     PARTITION OF warehouse.stockitemtransactions
+--     FOR VALUES FROM ('2014-01-01 00:00:00+00') TO ('2015-01-01 00:00:00+00');
+--
+-- -- year 2015 (MSSQL partition 3)
+-- CREATE TABLE warehouse.stockitemtransactions_2015
+--     PARTITION OF warehouse.stockitemtransactions
+--     FOR VALUES FROM ('2015-01-01 00:00:00+00') TO ('2016-01-01 00:00:00+00');
+--
+-- -- year 2016 (MSSQL partition 4)
+-- CREATE TABLE warehouse.stockitemtransactions_2016
+--     PARTITION OF warehouse.stockitemtransactions
+--     FOR VALUES FROM ('2016-01-01 00:00:00+00') TO ('2017-01-01 00:00:00+00');
+--
+-- -- 2017 and beyond (MSSQL partition 5)
+-- CREATE TABLE warehouse.stockitemtransactions_2017_plus
+--     PARTITION OF warehouse.stockitemtransactions
+--     FOR VALUES FROM ('2017-01-01 00:00:00+00') TO (MAXVALUE);

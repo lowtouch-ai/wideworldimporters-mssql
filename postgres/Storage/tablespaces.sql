@@ -1,0 +1,30 @@
+-- Converted from: wwi-ssdt/wwi-ssdt/Storage/USERDATA.sql
+--                 wwi-ssdt/wwi-ssdt/Storage/WWI_MemoryOptimized_Data.sql
+--
+-- MSSQL filegroups have no direct PostgreSQL equivalent. PostgreSQL uses tablespaces
+-- (filesystem-level storage locations) as the nearest analogue. However, the default
+-- pg_default tablespace is sufficient for most deployments — a custom tablespace is
+-- only needed when physical storage separation is required.
+--
+-- USERDATA filegroup
+-- ------------------
+-- In MSSQL this filegroup holds all regular application data (tables, indexes).
+-- PostgreSQL equivalent: a dedicated tablespace. Uncomment the block below and adjust
+-- the LOCATION path if a separate storage mount is desired.
+--
+-- CREATE TABLESPACE userdata
+--     OWNER postgres
+--     LOCATION '/mnt/data/pg/userdata';
+--
+-- COMMENT ON TABLESPACE userdata IS
+--     'Tablespace for WideWorldImporters application data. '
+--     'Equivalent to the [USERDATA] filegroup in MSSQL.';
+--
+-- WWI_MemoryOptimized_Data filegroup (CONTAINS MEMORY_OPTIMIZED_DATA)
+-- --------------------------------------------------------------------
+-- MSSQL In-Memory OLTP (Hekaton) uses a dedicated MEMORY_OPTIMIZED_DATA filegroup
+-- for memory-optimized tables. PostgreSQL has no equivalent storage object.
+-- Memory-intensive workloads in PostgreSQL are tuned via postgresql.conf settings
+-- (shared_buffers, huge_pages, effective_cache_size) and optionally via UNLOGGED
+-- tables, not via DDL filegroup declarations.
+-- No DDL action is emitted for this filegroup.
