@@ -65,7 +65,7 @@ namespace wwi_app.Controllers
         public async Task SalesOrders(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_sales_order_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_sales_order_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -73,7 +73,7 @@ namespace wwi_app.Controllers
         public async Task SalesOrders()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_sales_orders_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_sales_orders_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -98,7 +98,7 @@ namespace wwi_app.Controllers
         public async Task SalesOrderLines(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_sales_order_line_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_sales_order_line_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -106,7 +106,7 @@ namespace wwi_app.Controllers
         public async Task SalesOrderLines()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_sales_order_lines_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_sales_order_lines_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -131,7 +131,7 @@ namespace wwi_app.Controllers
         public async Task PurchaseOrders(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_purchase_order_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_purchase_order_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -139,7 +139,7 @@ namespace wwi_app.Controllers
         public async Task PurchaseOrders()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_purchase_orders_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_purchase_orders_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -164,7 +164,7 @@ namespace wwi_app.Controllers
         public async Task PurchaseOrderLines(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_purchase_order_line_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_purchase_order_line_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -172,7 +172,7 @@ namespace wwi_app.Controllers
         public async Task PurchaseOrderLines()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_purchase_order_lines_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_purchase_order_lines_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -197,7 +197,7 @@ namespace wwi_app.Controllers
         public async Task Invoices(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_invoice_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_invoice_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -205,7 +205,7 @@ namespace wwi_app.Controllers
         public async Task Invoices()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_invoices_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_invoices_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -230,7 +230,7 @@ namespace wwi_app.Controllers
         public async Task SpecialDeals(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_special_deal_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_special_deal_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -238,7 +238,7 @@ namespace wwi_app.Controllers
         public async Task SpecialDeals()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_special_deals_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_special_deals_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -263,7 +263,7 @@ namespace wwi_app.Controllers
         public async Task CustomerTransactions(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_customer_transaction_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_customer_transaction_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -271,7 +271,7 @@ namespace wwi_app.Controllers
         public async Task CustomerTransactions()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_customer_transactions_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_customer_transactions_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -296,7 +296,7 @@ namespace wwi_app.Controllers
         public async Task SupplierTransactions(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_supplier_transaction_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_supplier_transaction_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -304,7 +304,7 @@ namespace wwi_app.Controllers
         public async Task SupplierTransactions()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_supplier_transactions_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_supplier_transactions_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -329,7 +329,7 @@ namespace wwi_app.Controllers
         public async Task Customers(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_customer_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_customer_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -337,7 +337,7 @@ namespace wwi_app.Controllers
         public async Task Customers()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_customers_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_customers_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -362,7 +362,7 @@ namespace wwi_app.Controllers
         public async Task Suppliers(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_supplier_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_supplier_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -370,7 +370,7 @@ namespace wwi_app.Controllers
         public async Task Suppliers()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_suppliers_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_suppliers_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -395,7 +395,7 @@ namespace wwi_app.Controllers
         public async Task Countries(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_country_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_country_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -403,7 +403,7 @@ namespace wwi_app.Controllers
         public async Task Countries()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_countries_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_countries_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -428,7 +428,7 @@ namespace wwi_app.Controllers
         public async Task Cities(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_city_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_city_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -436,7 +436,7 @@ namespace wwi_app.Controllers
         public async Task Cities()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_cities_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_cities_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -461,7 +461,7 @@ namespace wwi_app.Controllers
         public async Task StateProvinces(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_state_province_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_state_province_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -469,7 +469,7 @@ namespace wwi_app.Controllers
         public async Task StateProvinces()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_state_provinces_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_state_provinces_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -494,7 +494,7 @@ namespace wwi_app.Controllers
         public async Task StockItems(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_stock_item_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_stock_item_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -502,7 +502,7 @@ namespace wwi_app.Controllers
         public async Task StockItems()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_stock_items_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_stock_items_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -527,7 +527,7 @@ namespace wwi_app.Controllers
         public async Task PackageTypes(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_package_type_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_package_type_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -535,7 +535,7 @@ namespace wwi_app.Controllers
         public async Task PackageTypes()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_package_types_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_package_types_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -560,7 +560,7 @@ namespace wwi_app.Controllers
         public async Task Colors(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_color_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_color_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -568,7 +568,7 @@ namespace wwi_app.Controllers
         public async Task Colors()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_colors_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_colors_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -593,7 +593,7 @@ namespace wwi_app.Controllers
         public async Task StockGroups(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_stock_group_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_stock_group_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -601,7 +601,7 @@ namespace wwi_app.Controllers
         public async Task StockGroups()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_stock_groups_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_stock_groups_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -626,7 +626,7 @@ namespace wwi_app.Controllers
         public async Task BuyingGroups(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_buying_group_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_buying_group_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -634,7 +634,7 @@ namespace wwi_app.Controllers
         public async Task BuyingGroups()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_buying_groups_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_buying_groups_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -659,7 +659,7 @@ namespace wwi_app.Controllers
         public async Task CustomerCategories(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_customer_category_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_customer_category_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -667,7 +667,7 @@ namespace wwi_app.Controllers
         public async Task CustomerCategories()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_customer_categories_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_customer_categories_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -692,7 +692,7 @@ namespace wwi_app.Controllers
         public async Task SupplierCategories(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_supplier_category_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_supplier_category_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -700,7 +700,7 @@ namespace wwi_app.Controllers
         public async Task SupplierCategories()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_supplier_categories_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_supplier_categories_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -725,7 +725,7 @@ namespace wwi_app.Controllers
         public async Task TransactionTypes(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_transaction_type_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_transaction_type_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -733,7 +733,7 @@ namespace wwi_app.Controllers
         public async Task TransactionTypes()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_transaction_types_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_transaction_types_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -758,7 +758,7 @@ namespace wwi_app.Controllers
         public async Task PaymentMethods(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_payment_method_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_payment_method_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -766,7 +766,7 @@ namespace wwi_app.Controllers
         public async Task PaymentMethods()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_payment_methods_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_payment_methods_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
@@ -791,7 +791,7 @@ namespace wwi_app.Controllers
         public async Task DeliveryMethods(int id, string body)
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.update_delivery_method_from_json(@json::jsonb, @id, @userId)", new { json, id, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.update_delivery_method_from_json(@json::text, @id, @userId)", new { json, id, userId = GetUserId() });
         }
 
         [Authorize]
@@ -799,7 +799,7 @@ namespace wwi_app.Controllers
         public async Task DeliveryMethods()
         {
             var json = new StreamReader(Request.Body).ReadToEnd();
-            await ExecVoid("SELECT webapi.insert_delivery_methods_from_json(@json::jsonb, @userId)", new { json, userId = GetUserId() });
+            await ExecVoid("SELECT webapi.insert_delivery_methods_from_json(@json::text, @userId)", new { json, userId = GetUserId() });
         }
 
         [Authorize]
