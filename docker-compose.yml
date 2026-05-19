@@ -2,25 +2,6 @@ version: "3.8"
 
 services:
 
-  mssql:
-    image: mcr.microsoft.com/mssql/server:2017-latest
-    container_name: wwi_mssql
-    environment:
-      ACCEPT_EULA: "Y"
-      SA_PASSWORD: "Sp1d3rman!"
-      MSSQL_PID: "Developer"
-    ports:
-      - "1433:1433"
-    volumes:
-      - mssql_data:/var/opt/mssql
-    networks:
-      - wwi-net
-    healthcheck:
-      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Sp1d3rman!", "-Q", "SELECT 1"]
-      interval: 10s
-      retries: 10
-      start_period: 30s
-
   wwi-app:
     build:
       context: ./wwi-app
@@ -29,18 +10,16 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
-      ConnectionStrings__WWI: "Server=mssql;Database=WideWorldImporters;User=WebApi;Password=Sp1d3rman!;Application Name=WideWorldImporters"
+      ConnectionStrings__WWI: "Host=postgres_15.1;Database=postgres;Username=postgres;Password=postgres;Application Name=WideWorldImporters"
     ports:
       - "8083:80"
-    depends_on:
-      mssql:
-        condition: service_healthy
     networks:
       - wwi-net
-
-volumes:
-  mssql_data:
+      - agentomatic
 
 networks:
   wwi-net:
     driver: bridge
+  agentomatic:
+    external: true
+    name: appz-images_agentomatic_net

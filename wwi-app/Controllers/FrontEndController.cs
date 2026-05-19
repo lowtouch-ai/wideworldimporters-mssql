@@ -1,11 +1,11 @@
-﻿using Belgrade.SqlClient;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -13,18 +13,18 @@ namespace wwi_app.Controllers
 {
     public partial class FrontEndController : Controller
     {
-        private readonly ICommand queryService;
+        private readonly NpgsqlDataSource _dataSource;
         private readonly ILogger _logger;
 
-        public FrontEndController(ICommand queryService, ILogger<FrontEndController> logger)
+        public FrontEndController(NpgsqlDataSource dataSource, ILogger<FrontEndController> logger)
         {
-            this.queryService = queryService;
+            this._dataSource = dataSource;
             this._logger = logger;
         }
 
         public async Task<IActionResult> Login(string username, string password)
         {
-            if(string.IsNullOrEmpty(username))
+            if (string.IsNullOrEmpty(username))
             {
                 return Redirect("~/Index");
             }
@@ -32,30 +32,39 @@ namespace wwi_app.Controllers
             bool isValidUser = false;
             var claims = new List<Claim>() { new Claim(ClaimTypes.Email, username) };
 
-            await queryService
-                .Sql("EXEC WebApi.Login @LogonName, @Password")
-                .Param("LogonName", DbType.String, username, 256)
-                .Param("Password", DbType.String, password, 256)
-                .OnError(e => _logger.LogError(e, "Cannot login user:" + username))
-                .Map(r => {
+            try
+            {
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT * FROM webapi.login($1, $2)";
+                cmd.Parameters.AddWithValue(username);
+                cmd.Parameters.AddWithValue(password);
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
                     isValidUser = true;
-                    claims.Add(new Claim(ClaimTypes.Sid, Convert.ToString(r["PersonID"])));
-                    claims.Add(new Claim(ClaimTypes.Name, Convert.ToString(r["PreferredName"])));
-                    if (Convert.ToBoolean(r["IsSalesperson"]))
+                    claims.Add(new Claim(ClaimTypes.Sid, Convert.ToString(reader["personid"])));
+                    claims.Add(new Claim(ClaimTypes.Name, Convert.ToString(reader["preferredname"])));
+                    if (reader["issalesperson"] != DBNull.Value && Convert.ToBoolean(reader["issalesperson"]))
                         claims.Add(new Claim(ClaimTypes.Role, "Salesperson"));
-                    if (Convert.ToBoolean(r["IsEmployee"]))
+                    if (reader["isemployee"] != DBNull.Value && Convert.ToBoolean(reader["isemployee"]))
                         claims.Add(new Claim(ClaimTypes.Role, "Employee"));
-                    if (r["Territory"] != null)
-                        claims.Add(new Claim("Territory", r["Territory"].ToString()));
+                    if (reader["territory"] != DBNull.Value && reader["territory"] != null)
+                        claims.Add(new Claim("Territory", reader["territory"].ToString()));
                 }
-            );
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Cannot login user:" + username);
+            }
 
             if (isValidUser)
             {
                 var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
                 await HttpContext.SignInAsync(new ClaimsPrincipal(claimsIdentity));
                 return Redirect("~/Dashboard");
-            } else
+            }
+            else
             {
                 _logger.LogWarning("Cannot login user: " + username);
             }
@@ -70,15 +79,19 @@ namespace wwi_app.Controllers
 
         public async Task Search(string name, string tag, double? minPrice, double? maxPrice, int? stockItemGroup, int top)
         {
-            await queryService
-                .Sql("EXEC WebApi.SearchForStockItems @Name, @Tag, @MinPrice, @MaxPrice, @StockGroupID, @MaximumRowsToReturn")
-                .Param("Name", DbType.String, name, 100)
-                .Param("Tag", DbType.String, tag, 100)
-                .Param("MinPrice", DbType.Decimal, minPrice)
-                .Param("MaxPrice", DbType.Decimal, maxPrice)
-                .Param("StockGroupID", DbType.Int32, stockItemGroup)
-                .Param("MaximumRowsToReturn", DbType.Int32, 20)
-                .Stream(Response.Body, "{\"value\":[]}");
+            await using var conn = await _dataSource.OpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT webapi.search_for_stock_items($1, $2, $3, $4, $5, $6)";
+            cmd.Parameters.AddWithValue(name as object ?? DBNull.Value);
+            cmd.Parameters.AddWithValue(tag as object ?? DBNull.Value);
+            cmd.Parameters.AddWithValue(minPrice as object ?? DBNull.Value);
+            cmd.Parameters.AddWithValue(maxPrice as object ?? DBNull.Value);
+            cmd.Parameters.AddWithValue(stockItemGroup as object ?? DBNull.Value);
+            cmd.Parameters.AddWithValue(top <= 0 ? 20 : top);
+            var result = await cmd.ExecuteScalarAsync();
+            var json = result as string ?? "{\"value\":[]}";
+            Response.ContentType = "application/json";
+            await Response.WriteAsync(json);
         }
     }
 }

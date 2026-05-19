@@ -4,7 +4,7 @@
 
 <div class="row">
     <div id="part4" class="col-md-12">
-        <h2>Daily sales in <strong>@User.Claims.FirstOrDefault(c => c.Type == "Territory").Value</strong> region</h2>
+        <h2>Daily sales in <strong>@(User.Claims.FirstOrDefault(c => c.Type == "Territory")?.Value ?? "All")</strong> region</h2>
         <svg style="height:200px"> </svg>
     </div>
 </div>

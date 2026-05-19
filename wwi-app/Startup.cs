@@ -1,13 +1,11 @@
-﻿using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using MsSql.RestApi;
-using System;
-using System.Linq;
+using Npgsql;
 
 namespace App
 {
@@ -38,15 +36,9 @@ namespace App
                             }
                         );
 
-            services
-                .AddSqlClient(Configuration["ConnectionStrings:WWI"],
-                                options =>
-                                {
-                                    options.SessionContext
-                                            .Add("SalesTerritory", GetTerritoryFromSession);
-                                    options.EnableODataExtensions = true;
-
-                                });
+            var connStr = Configuration["ConnectionStrings:WWI"];
+            var dataSource = new NpgsqlDataSourceBuilder(connStr).Build();
+            services.AddSingleton(dataSource);
 
             services.AddAuthorization();
 
@@ -88,24 +80,6 @@ namespace App
                    new { controller = "OData" }
                 );
             });
-        }
-
-        /// <summary>
-        /// Utility method that takes Territory from cookie.
-        /// You need to add: services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
-        /// </summary>
-        /// <param name="serviceProvider">IServiceProvider interface.</param>
-        /// <returns>Session value</returns>
-        private string GetTerritoryFromSession(IServiceProvider serviceProvider)
-        {
-            var ctx = serviceProvider.GetServices<IHttpContextAccessor>().First().HttpContext;
-            if (ctx.User.Identity.IsAuthenticated)
-            {
-                var cl = ctx.User.Claims.FirstOrDefault(c => c.Type == "Territory");
-                if (cl != null)
-                    return cl.Value;
-            }
-            return "";
         }
     }
 }

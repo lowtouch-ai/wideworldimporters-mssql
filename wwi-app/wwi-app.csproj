@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <SignAssembly>false</SignAssembly>
@@ -12,8 +12,10 @@
     <Content Remove="wwwroot\OData.tt" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="MsSql.RestApi" Version="0.4.0" />
+    <PackageReference Include="Dapper" Version="2.1.28" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    <PackageReference Include="Npgsql" Version="8.0.3" />
+    <PackageReference Include="Npgsql.DependencyInjection" Version="8.0.3" />
   </ItemGroup>
 
   <ItemGroup>
