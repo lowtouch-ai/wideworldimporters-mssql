@@ -11,7 +11,7 @@ The WideWorldImporters MSSQL sample database needs a complete conversion to Post
 | DataLoadSimulation | Convert all (tables + 10 functions + 42 SPs) |
 | PostDeploymentScripts | Adapt 51 INSERT scripts to PostgreSQL syntax via `/mssql-to-postgres` |
 | Application config SPs | Convert applicable (RLS), stub MSSQL-only ones (columnstore, in-memory OLTP, full-text, partitioning) |
-| API generation | Run `/mssql-to-api` for every SP that successfully converts via `/mssql-to-pgfunc` |
+| API generation | Not applicable — API layer is .NET; PostgreSQL functions are called directly via Npgsql |
 | Security scripts | Defer — PostgreSQL GRANT/ROLE equivalents require separate treatment |
 | Storage scripts | Skip — filegroups/partitions don't apply to PostgreSQL |
 
@@ -20,8 +20,9 @@ The WideWorldImporters MSSQL sample database needs a complete conversion to Post
 ```
 /mssql-to-pgfunc <sp-path>        → postgres/<Schema>/Functions/<name>.sql
 /pgfunc-test <func-path>          → smoke test in wwi_test schema
-/mssql-to-api <sp-path>           → api/routers/<schema>/<endpoint>.py   (if pgfunc succeeded)
 ```
+
+Note: API layer is .NET — no FastAPI endpoint generation. The PL/pgSQL functions are called directly from .NET via Npgsql.
 
 ## File Naming Conventions
 
@@ -358,7 +359,7 @@ UDTs produce composite types; verify output SQL file parses without error (no de
 
 ### Session 7 — WebApi Delete* + Login + SearchForStockItems SPs (17 SPs) ✓ COMPLETED 2026-05-19
 
-**Results:** 17 functions converted; all 17/17 pgfunc-tests pass. FastAPI scaffold created (`api/requirements.txt`, `api/db.py`, `api/main.py`, `api/schemas/__init__.py`). 17 endpoint files generated in `api/routers/webapi/` with all imports registered in `__init__.py` and router registered in `main.py`. Key special handling: Login SP had password check commented out in original — accepted parameter but not validated (TODO noted); SearchForStockItems uses `webapi.stock_items` view, CROSS APPLY OPENJSON → `CROSS JOIN LATERAL jsonb_array_elements_text`, FOR JSON PATH, WITHOUT_ARRAY_WRAPPER → single-row SELECT returning `{value, tags}` dict (TODO: verify JSON shape). All 15 Delete endpoints: DELETE with 204/404. Login: POST `/web-api/login` with 200/401. SearchForStockItems: GET `/web-api/stock-items/search` with 200.
+**Results:** 17 functions converted; all 17/17 pgfunc-tests pass. Key special handling: Login SP had password check commented out in original — p_password accepted but not validated; SearchForStockItems uses `webapi.stock_items` view, CROSS APPLY OPENJSON → `CROSS JOIN LATERAL jsonb_array_elements_text`, FOR JSON PATH WITHOUT_ARRAY_WRAPPER → single-row SELECT returning `{value, tags}` jsonb (TODO: verify JSON shape). Note: FastAPI endpoints were initially generated then removed — API layer is .NET calling PostgreSQL functions directly.
 
 Per-SP workflow: `/mssql-to-pgfunc` → `/pgfunc-test` → `/mssql-to-api`
 
@@ -448,8 +449,6 @@ Then for each function that passed: run `/mssql-to-api` against the original SP 
 /pgfunc-test postgres/WebApi/Functions/insert_transaction_types_from_json.sql
 ```
 
-Then run `/mssql-to-api` for each passing function.
-
 ---
 
 ### Session 9 — WebApi Update*FromJson SPs batch 1 (14 SPs)
@@ -489,8 +488,6 @@ Then run `/mssql-to-api` for each passing function.
 /pgfunc-test postgres/WebApi/Functions/update_special_deal_from_json.sql
 ```
 
-Then run `/mssql-to-api` for each passing function.
-
 ---
 
 ### Session 10 — WebApi Update*FromJson SPs batch 2 (7 SPs)
@@ -515,8 +512,6 @@ Then run `/mssql-to-api` for each passing function.
 /pgfunc-test postgres/WebApi/Functions/update_supplier_transaction_from_json.sql
 /pgfunc-test postgres/WebApi/Functions/update_transaction_type_from_json.sql
 ```
-
-Then run `/mssql-to-api` for each passing function.
 
 ---
 
@@ -552,8 +547,6 @@ SP source path prefix: `wwi-ssdt/wwi-ssdt/Website/Stored Procedures/`
 /pgfunc-test postgres/Website/Functions/search_for_stock_items_by_tags.sql
 /pgfunc-test postgres/Website/Functions/search_for_suppliers.sql
 ```
-
-Then run `/mssql-to-api` for each passing function.
 
 ---
 
@@ -593,8 +586,6 @@ SP source path prefix: `wwi-ssdt/wwi-ssdt/Integration/Stored Procedures/`
 /pgfunc-test postgres/Integration/Functions/get_transaction_type_updates.sql
 /pgfunc-test postgres/Integration/Functions/get_transaction_updates.sql
 ```
-
-Then run `/mssql-to-api` for each passing function.
 
 ---
 
@@ -852,12 +843,12 @@ There is no automated smoke test skill for INSERT scripts. Verify by checking th
 | 4 | 17 transaction/line tables + 5 misc | mssql-to-postgres, pgtable-test |
 | 5 | 4 UDTs + 12 functions | mssql-to-pgudt, mssql-to-pgfunc, pgfunc-test |
 | 6 | 26 views | mssql-to-pgview, pgview-test |
-| 7 | 17 WebApi SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
-| 8 | 15 WebApi Insert SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
-| 9 | 14 WebApi Update SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
-| 10 | 7 WebApi Update SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
-| 11 | 11 Website SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
-| 12 | 13 Integration SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
+| 7 | 17 WebApi SPs | mssql-to-pgfunc, pgfunc-test |
+| 8 | 15 WebApi Insert SPs | mssql-to-pgfunc, pgfunc-test |
+| 9 | 14 WebApi Update SPs | mssql-to-pgfunc, pgfunc-test |
+| 10 | 7 WebApi Update SPs | mssql-to-pgfunc, pgfunc-test |
+| 11 | 11 Website SPs | mssql-to-pgfunc, pgfunc-test |
+| 12 | 13 Integration SPs | mssql-to-pgfunc, pgfunc-test |
 | 13 | 16 Application + Sequences SPs | mssql-to-pgfunc, pgfunc-test |
 | 14 | 22 DataLoadSim SPs | mssql-to-pgfunc, pgfunc-test |
 | 15 | 20 DataLoadSim SPs | mssql-to-pgfunc, pgfunc-test |
