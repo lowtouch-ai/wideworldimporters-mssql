@@ -11,7 +11,7 @@ The WideWorldImporters MSSQL sample database needs a complete conversion to Post
 | DataLoadSimulation | Convert all (tables + 10 functions + 42 SPs) |
 | PostDeploymentScripts | Adapt 51 INSERT scripts to PostgreSQL syntax via `/mssql-to-postgres` |
 | Application config SPs | Convert applicable (RLS), stub MSSQL-only ones (columnstore, in-memory OLTP, full-text, partitioning) |
-| API generation | Run `/mssql-to-api` for every SP that successfully converts via `/mssql-to-pgfunc` |
+| API generation | Not applicable — API layer is .NET; PostgreSQL functions are called directly via Npgsql |
 | Security scripts | Defer — PostgreSQL GRANT/ROLE equivalents require separate treatment |
 | Storage scripts | Skip — filegroups/partitions don't apply to PostgreSQL |
 
@@ -20,8 +20,9 @@ The WideWorldImporters MSSQL sample database needs a complete conversion to Post
 ```
 /mssql-to-pgfunc <sp-path>        → postgres/<Schema>/Functions/<name>.sql
 /pgfunc-test <func-path>          → smoke test in wwi_test schema
-/mssql-to-api <sp-path>           → api/routers/<schema>/<endpoint>.py   (if pgfunc succeeded)
 ```
+
+Note: API layer is .NET — no FastAPI endpoint generation. The PL/pgSQL functions are called directly from .NET via Npgsql.
 
 ## File Naming Conventions
 
@@ -189,6 +190,10 @@ Sequences are validated implicitly when the tables that reference them pass thei
 
 ---
 
+### Session 4 — Transaction & Line-Item Tables + DataLoadSimulation + Misc ✓ COMPLETED 2026-05-19
+
+**Results:** 15 tables converted and tested. All 15/15 pgtable-tests pass. Key special handling: MEMORY_OPTIMIZED stripped (3 tables), SYSTEM_VERSIONING stripped (ColdRoomTemperatures), COLUMNSTORE indexes omitted (OrderLines, InvoiceLines, StockItemTransactions), partition scheme PS_TransactionDate stripped (CustomerTransactions, SupplierTransactions), PERSISTED computed IsFinalized → BOOLEAN GENERATED ALWAYS AS STORED (CustomerTransactions, SupplierTransactions), non-persisted computed columns ConfirmedDeliveryTime/ConfirmedReceivedBy → plain nullable columns (Invoices).
+
 ### Session 4 — Transaction & Line-Item Tables + DataLoadSimulation + Misc
 
 **Sales transactions:**
@@ -247,6 +252,10 @@ Sequences are validated implicitly when the tables that reference them pass thei
 
 ---
 
+### Session 5 — Website UDTs + All Functions ✓ COMPLETED 2026-05-19
+
+**Results:** 4 UDTs converted (OrderIDList, OrderLineList, OrderList, SensorDataList). 12 functions converted and tested across Application (1), DataLoadSimulation (10), Website (1). All 12/12 pgfunc-tests pass. Key special handling: MEMORY_OPTIMIZED stripped from all UDTs, IDENTITY stripped from SensorDataList, IS_ROLEMEMBER → pg_has_role with EXCEPTION WHEN undefined_object wrapper (DetermineCustomerAccess), ABS(CHECKSUM(NEWID())) → random() (GetBogativePhoneNumber was a SP with OUTPUT param converted to scalar function), unquoted column names used throughout to match lowercase-folded DDL.
+
 ### Session 5 — Website UDTs + All Functions
 
 **Website User Defined Types:**
@@ -300,7 +309,9 @@ UDTs produce composite types; verify output SQL file parses without error (no de
 
 ---
 
-### Session 6 — Views
+### Session 6 — Views ✓ COMPLETED 2026-05-19
+
+**Results:** 26 views converted and smoke-tested. All 26/26 pgview-tests pass. Key special handling: PostGIS `ST_X`/`ST_Y` for geography `.Long`/`.Lat` accessors (Cities, Customers, Suppliers, SalesOrders views); `ST_AsGeoJSON(border::geometry)::json` for StateProvinces border (replacing complex REPLACE chain); `json_build_object` for GeoJSON DeliveryLocation in Customers/Suppliers/SalesOrders; `FOR JSON PATH, WITHOUT_ARRAY_WRAPPER` → `row_to_json` / `json_build_object` (flagged with TODOs); reversed column aliases (`Alias = expr` → `expr AS Alias`) in PurchaseOrders, SalesOrders, etc.; `DECOMPRESS()` → NULL with TODO comment in Website/VehicleTemperatures. All views pass 0-row smoke queries in the shared `postgres_15.1` container.
 
 **WebApi views (bulk — 23 files):**
 ```
@@ -346,7 +357,9 @@ UDTs produce composite types; verify output SQL file parses without error (no de
 
 ---
 
-### Session 7 — WebApi Delete* + Login + SearchForStockItems SPs (17 SPs)
+### Session 7 — WebApi Delete* + Login + SearchForStockItems SPs (17 SPs) ✓ COMPLETED 2026-05-19
+
+**Results:** 17 functions converted; all 17/17 pgfunc-tests pass. Key special handling: Login SP had password check commented out in original — p_password accepted but not validated; SearchForStockItems uses `webapi.stock_items` view, CROSS APPLY OPENJSON → `CROSS JOIN LATERAL jsonb_array_elements_text`, FOR JSON PATH WITHOUT_ARRAY_WRAPPER → single-row SELECT returning `{value, tags}` jsonb (TODO: verify JSON shape). Note: FastAPI endpoints were initially generated then removed — API layer is .NET calling PostgreSQL functions directly.
 
 Per-SP workflow: `/mssql-to-pgfunc` → `/pgfunc-test` → `/mssql-to-api`
 
@@ -397,6 +410,10 @@ Then for each function that passed: run `/mssql-to-api` against the original SP 
 
 ---
 
+### Session 8 — WebApi Insert*FromJson SPs (15 SPs) ✓ COMPLETED 2026-05-19
+
+**Results:** 15 Insert*FromJson functions converted and smoke-tested. All 15/15 pgfunc-test calls pass. Key special handling: `OPENJSON ... WITH (col type N'strict $.path')` → `jsonb_to_recordset(p_json::jsonb) AS x("PascalCaseKey" type)` — JSON keys must be quoted PascalCase in AS clause to match case-sensitive JSON keys; table columns are unquoted lowercase; `RETURNING table_name.pk_col` required to disambiguate from RETURNS TABLE output variable; `Photo varbinary(MAX)` → `text` in AS clause with `decode(x."Photo", 'base64')::bytea` cast; `CustomFields nvarchar(MAX) AS JSON` → `text` (column type in target table).
+
 ### Session 8 — WebApi Insert*FromJson SPs (15 SPs)
 
 ```
@@ -436,9 +453,11 @@ Then for each function that passed: run `/mssql-to-api` against the original SP 
 /pgfunc-test postgres/WebApi/Functions/insert_transaction_types_from_json.sql
 ```
 
-Then run `/mssql-to-api` for each passing function.
-
 ---
+
+### Session 9 — WebApi Update*FromJson SPs batch 1 (14 SPs) ✓ COMPLETED 2026-05-19
+
+**Results:** 14 Update*FromJson functions converted and smoke-tested. All 14/14 pass. Key special handling: `OPENJSON(@Json) WITH (...) as json` → `jsonb_to_record(p_json::jsonb) AS x("PascalCaseKey" type, ...)` (single-record, not recordset); `ISNULL(json.Field, Table.Field)` → `COALESCE(x."Field", table.col)` to preserve existing value when JSON field is absent/null; direct `x."Field"` (no COALESCE) for nullable columns the API can intentionally clear (e.g. BuyingGroupID, CreditLimit, FinalizationDate); all functions return `void`.
 
 ### Session 9 — WebApi Update*FromJson SPs batch 1 (14 SPs)
 
@@ -477,8 +496,6 @@ Then run `/mssql-to-api` for each passing function.
 /pgfunc-test postgres/WebApi/Functions/update_special_deal_from_json.sql
 ```
 
-Then run `/mssql-to-api` for each passing function.
-
 ---
 
 ### Session 10 — WebApi Update*FromJson SPs batch 2 (7 SPs)
@@ -504,9 +521,11 @@ Then run `/mssql-to-api` for each passing function.
 /pgfunc-test postgres/WebApi/Functions/update_transaction_type_from_json.sql
 ```
 
-Then run `/mssql-to-api` for each passing function.
-
 ---
+
+### Session 11 — Website SPs (11 SPs) ✓ COMPLETED 2026-05-19
+
+**Results:** 11 Website SPs converted and smoke-tested. All 11/11 pgfunc-test calls pass. Key special handling: FOR JSON AUTO/ROOT → `json_build_object('root', json_agg(row_to_json(t)))` (5 Search SPs); HASHBYTES('SHA2_256') → `digest(val::bytea, 'sha256')` via pgcrypto + GET DIAGNOSTICS for @@ROWCOUNT (ActivateWebsiteLogon, ChangePassword); TVP parameters → `website.order_list[]` / `website.order_line_list[]` / `website.order_id_list[]` composite type arrays + UNNEST + temp table for sequence allocation (InsertCustomerOrders, InvoiceCustomerOrders); JSON_MODIFY chain → `jsonb_build_object` with `jsonb_build_array` (InvoiceCustomerOrders ReturnedDeliveryData); NATIVE_COMPILATION/Hekaton stripped entirely, WHILE loop → FOR rec IN SELECT FROM UNNEST ORDER BY sensordatalistid + UPDATE/GET DIAGNOSTICS/INSERT upsert (RecordColdRoomTemperatures); ISJSON → try::jsonb cast in nested EXCEPTION block, OPENJSON nested paths → `jsonb_array_elements(...)->'properties'->>'field'` (RecordVehicleTemperature). All column names unquoted lowercase throughout.
 
 ### Session 11 — Website SPs (11 SPs)
 
@@ -540,8 +559,6 @@ SP source path prefix: `wwi-ssdt/wwi-ssdt/Website/Stored Procedures/`
 /pgfunc-test postgres/Website/Functions/search_for_stock_items_by_tags.sql
 /pgfunc-test postgres/Website/Functions/search_for_suppliers.sql
 ```
-
-Then run `/mssql-to-api` for each passing function.
 
 ---
 
@@ -581,8 +598,6 @@ SP source path prefix: `wwi-ssdt/wwi-ssdt/Integration/Stored Procedures/`
 /pgfunc-test postgres/Integration/Functions/get_transaction_type_updates.sql
 /pgfunc-test postgres/Integration/Functions/get_transaction_updates.sql
 ```
-
-Then run `/mssql-to-api` for each passing function.
 
 ---
 
@@ -840,12 +855,12 @@ There is no automated smoke test skill for INSERT scripts. Verify by checking th
 | 4 | 17 transaction/line tables + 5 misc | mssql-to-postgres, pgtable-test |
 | 5 | 4 UDTs + 12 functions | mssql-to-pgudt, mssql-to-pgfunc, pgfunc-test |
 | 6 | 26 views | mssql-to-pgview, pgview-test |
-| 7 | 17 WebApi SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
-| 8 | 15 WebApi Insert SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
-| 9 | 14 WebApi Update SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
-| 10 | 7 WebApi Update SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
-| 11 | 11 Website SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
-| 12 | 13 Integration SPs | mssql-to-pgfunc, pgfunc-test, mssql-to-api |
+| 7 | 17 WebApi SPs | mssql-to-pgfunc, pgfunc-test |
+| 8 | 15 WebApi Insert SPs | mssql-to-pgfunc, pgfunc-test |
+| 9 | 14 WebApi Update SPs | mssql-to-pgfunc, pgfunc-test |
+| 10 | 7 WebApi Update SPs | mssql-to-pgfunc, pgfunc-test |
+| 11 | 11 Website SPs | mssql-to-pgfunc, pgfunc-test |
+| 12 | 13 Integration SPs | mssql-to-pgfunc, pgfunc-test |
 | 13 | 16 Application + Sequences SPs | mssql-to-pgfunc, pgfunc-test |
 | 14 | 22 DataLoadSim SPs | mssql-to-pgfunc, pgfunc-test |
 | 15 | 20 DataLoadSim SPs | mssql-to-pgfunc, pgfunc-test |
