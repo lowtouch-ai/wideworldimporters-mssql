@@ -308,7 +308,9 @@ UDTs produce composite types; verify output SQL file parses without error (no de
 
 ---
 
-### Session 6 — Views
+### Session 6 — Views ✓ COMPLETED 2026-05-19
+
+**Results:** 26 views converted and smoke-tested. All 26/26 pgview-tests pass. Key special handling: PostGIS `ST_X`/`ST_Y` for geography `.Long`/`.Lat` accessors (Cities, Customers, Suppliers, SalesOrders views); `ST_AsGeoJSON(border::geometry)::json` for StateProvinces border (replacing complex REPLACE chain); `json_build_object` for GeoJSON DeliveryLocation in Customers/Suppliers/SalesOrders; `FOR JSON PATH, WITHOUT_ARRAY_WRAPPER` → `row_to_json` / `json_build_object` (flagged with TODOs); reversed column aliases (`Alias = expr` → `expr AS Alias`) in PurchaseOrders, SalesOrders, etc.; `DECOMPRESS()` → NULL with TODO comment in Website/VehicleTemperatures. All views pass 0-row smoke queries in the shared `postgres_15.1` container.
 
 **WebApi views (bulk — 23 files):**
 ```
@@ -354,7 +356,9 @@ UDTs produce composite types; verify output SQL file parses without error (no de
 
 ---
 
-### Session 7 — WebApi Delete* + Login + SearchForStockItems SPs (17 SPs)
+### Session 7 — WebApi Delete* + Login + SearchForStockItems SPs (17 SPs) ✓ COMPLETED 2026-05-19
+
+**Results:** 17 functions converted; all 17/17 pgfunc-tests pass. FastAPI scaffold created (`api/requirements.txt`, `api/db.py`, `api/main.py`, `api/schemas/__init__.py`). 17 endpoint files generated in `api/routers/webapi/` with all imports registered in `__init__.py` and router registered in `main.py`. Key special handling: Login SP had password check commented out in original — accepted parameter but not validated (TODO noted); SearchForStockItems uses `webapi.stock_items` view, CROSS APPLY OPENJSON → `CROSS JOIN LATERAL jsonb_array_elements_text`, FOR JSON PATH, WITHOUT_ARRAY_WRAPPER → single-row SELECT returning `{value, tags}` dict (TODO: verify JSON shape). All 15 Delete endpoints: DELETE with 204/404. Login: POST `/web-api/login` with 200/401. SearchForStockItems: GET `/web-api/stock-items/search` with 200.
 
 Per-SP workflow: `/mssql-to-pgfunc` → `/pgfunc-test` → `/mssql-to-api`
 
