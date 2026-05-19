@@ -410,6 +410,10 @@ Then for each function that passed: run `/mssql-to-api` against the original SP 
 
 ---
 
+### Session 8 — WebApi Insert*FromJson SPs (15 SPs) ✓ COMPLETED 2026-05-19
+
+**Results:** 15 Insert*FromJson functions converted and smoke-tested. All 15/15 pgfunc-test calls pass. Key special handling: `OPENJSON ... WITH (col type N'strict $.path')` → `jsonb_to_recordset(p_json::jsonb) AS x("PascalCaseKey" type)` — JSON keys must be quoted PascalCase in AS clause to match case-sensitive JSON keys; table columns are unquoted lowercase; `RETURNING table_name.pk_col` required to disambiguate from RETURNS TABLE output variable; `Photo varbinary(MAX)` → `text` in AS clause with `decode(x."Photo", 'base64')::bytea` cast; `CustomFields nvarchar(MAX) AS JSON` → `text` (column type in target table).
+
 ### Session 8 — WebApi Insert*FromJson SPs (15 SPs)
 
 ```
@@ -450,6 +454,10 @@ Then for each function that passed: run `/mssql-to-api` against the original SP 
 ```
 
 ---
+
+### Session 9 — WebApi Update*FromJson SPs batch 1 (14 SPs) ✓ COMPLETED 2026-05-19
+
+**Results:** 14 Update*FromJson functions converted and smoke-tested. All 14/14 pass. Key special handling: `OPENJSON(@Json) WITH (...) as json` → `jsonb_to_record(p_json::jsonb) AS x("PascalCaseKey" type, ...)` (single-record, not recordset); `ISNULL(json.Field, Table.Field)` → `COALESCE(x."Field", table.col)` to preserve existing value when JSON field is absent/null; direct `x."Field"` (no COALESCE) for nullable columns the API can intentionally clear (e.g. BuyingGroupID, CreditLimit, FinalizationDate); all functions return `void`.
 
 ### Session 9 — WebApi Update*FromJson SPs batch 1 (14 SPs)
 
