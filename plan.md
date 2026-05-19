@@ -523,6 +523,10 @@ Then for each function that passed: run `/mssql-to-api` against the original SP 
 
 ---
 
+### Session 11 — Website SPs (11 SPs) ✓ COMPLETED 2026-05-19
+
+**Results:** 11 Website SPs converted and smoke-tested. All 11/11 pgfunc-test calls pass. Key special handling: FOR JSON AUTO/ROOT → `json_build_object('root', json_agg(row_to_json(t)))` (5 Search SPs); HASHBYTES('SHA2_256') → `digest(val::bytea, 'sha256')` via pgcrypto + GET DIAGNOSTICS for @@ROWCOUNT (ActivateWebsiteLogon, ChangePassword); TVP parameters → `website.order_list[]` / `website.order_line_list[]` / `website.order_id_list[]` composite type arrays + UNNEST + temp table for sequence allocation (InsertCustomerOrders, InvoiceCustomerOrders); JSON_MODIFY chain → `jsonb_build_object` with `jsonb_build_array` (InvoiceCustomerOrders ReturnedDeliveryData); NATIVE_COMPILATION/Hekaton stripped entirely, WHILE loop → FOR rec IN SELECT FROM UNNEST ORDER BY sensordatalistid + UPDATE/GET DIAGNOSTICS/INSERT upsert (RecordColdRoomTemperatures); ISJSON → try::jsonb cast in nested EXCEPTION block, OPENJSON nested paths → `jsonb_array_elements(...)->'properties'->>'field'` (RecordVehicleTemperature). All column names unquoted lowercase throughout.
+
 ### Session 11 — Website SPs (11 SPs)
 
 SP source path prefix: `wwi-ssdt/wwi-ssdt/Website/Stored Procedures/`
