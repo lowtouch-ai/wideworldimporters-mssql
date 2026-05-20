@@ -1,0 +1,25 @@
+-- Reset all sequences to MAX(id) of their respective tables
+SELECT setval('sequences.person_id_seq', COALESCE(MAX(personid), 1)) FROM application.people;
+SELECT setval('sequences.transaction_type_id_seq', COALESCE(MAX(transactiontypeid), 1)) FROM application.transactiontypes;
+SELECT setval('sequences.country_id_seq', COALESCE(MAX(countryid), 1)) FROM application.countries;
+SELECT setval('sequences.state_province_id_seq', COALESCE(MAX(stateprovinceid), 1)) FROM application.stateprovinces;
+SELECT setval('sequences.city_id_seq', COALESCE(MAX(cityid), 1)) FROM application.cities;
+SELECT setval('sequences.buying_group_id_seq', COALESCE(MAX(buyinggroupid), 1)) FROM sales.buyinggroups;
+SELECT setval('sequences.color_id_seq', COALESCE(MAX(colorid), 1)) FROM warehouse.colors;
+SELECT setval('sequences.customer_category_id_seq', COALESCE(MAX(customercategoryid), 1)) FROM sales.customercategories;
+SELECT setval('sequences.customer_id_seq', COALESCE(MAX(customerid), 1)) FROM sales.customers;
+SELECT setval('sequences.invoice_id_seq', COALESCE(MAX(invoiceid), 1)) FROM sales.invoices;
+SELECT setval('sequences.invoice_line_id_seq', COALESCE(MAX(invoicelineid), 1)) FROM sales.invoicelines;
+SELECT setval('sequences.order_id_seq', COALESCE(MAX(orderid), 1)) FROM sales.orders;
+SELECT setval('sequences.order_line_id_seq', COALESCE(MAX(orderlineid), 1)) FROM sales.orderlines;
+SELECT setval('sequences.package_type_id_seq', COALESCE(MAX(packagetypeid), 1)) FROM warehouse.packagetypes;
+SELECT setval('sequences.purchase_order_id_seq', COALESCE(MAX(purchaseorderid), 1)) FROM purchasing.purchaseorders;
+SELECT setval('sequences.purchase_order_line_id_seq', COALESCE(MAX(purchaseorderlineid), 1)) FROM purchasing.purchaseorderlines;
+SELECT setval('sequences.special_deal_id_seq', COALESCE(MAX(specialdealid), 1)) FROM sales.specialdeals;
+SELECT setval('sequences.stock_group_id_seq', COALESCE(MAX(stockgroupid), 1)) FROM warehouse.stockgroups;
+SELECT setval('sequences.stock_item_id_seq', COALESCE(MAX(stockitemid), 1)) FROM warehouse.stockitems;
+SELECT setval('sequences.supplier_category_id_seq', COALESCE(MAX(suppliercategoryid), 1)) FROM purchasing.suppliercategories;
+SELECT setval('sequences.supplier_id_seq', COALESCE(MAX(supplierid), 1)) FROM purchasing.suppliers;
+SELECT setval('sequences.transaction_id_seq', COALESCE(MAX(customertransactionid), 1)) FROM sales.customertransactions;
+SELECT setval('sequences.delivery_method_id_seq', COALESCE(MAX(deliverymethodid), 1)) FROM application.deliverymethods;
+SELECT setval('sequences.payment_method_id_seq', COALESCE(MAX(paymentmethodid), 1)) FROM application.paymentmethods;
