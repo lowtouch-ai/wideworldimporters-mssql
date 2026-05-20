@@ -114,6 +114,39 @@ SELECT setval('sequences.customer_id_seq', COALESCE(MAX(customerid), 1)) FROM sa
 
 ---
 
+## Fix 5 — Search endpoint 500: wrong view name and missing jsonb cast
+
+**Files:** `postgres/WebApi/Functions/search_for_stock_items.sql`, `wwi-app/Controllers/FrontEndController.cs`
+
+**Problem:** `GET /Search?name=...` returned 500 in two scenarios:
+1. Any search — `relation "webapi.stockitems" does not exist`
+2. Search with `minPrice` set — `function webapi.search_for_stock_items(text, unknown, double precision, ...) does not exist`
+
+**Root cause (1):** `search_for_stock_items` referenced `webapi.stockitems` but the view is named `webapi.stock_items` (snake_case with underscore). PL/pgSQL defers name resolution to execution time, so the function compiled successfully but failed on every call.
+
+**Root cause (2):** Npgsql infers .NET `double` as PostgreSQL `float8/double precision`. The function signature declares `numeric(18,2)`. PostgreSQL function overload resolution is strict and won't implicitly cast `float8` → `numeric`, so no match was found.
+
+**Fix (1):** Corrected the view reference in the function:
+```sql
+-- Before: FROM webapi.stockitems AS si
+FROM webapi.stock_items AS si
+```
+
+**Fix (2):** Added `::jsonb` cast where `CustomFields` (stored as `text`) was used with the `->` JSON operator:
+```sql
+jsonb_array_elements_text(v.CustomFields::jsonb->'Tags')
+```
+
+**Fix (3):** Added explicit type casts in the controller SQL so Npgsql parameter types are unambiguous:
+```csharp
+// Before:
+cmd.CommandText = "SELECT webapi.search_for_stock_items($1, $2, $3, $4, $5, $6)";
+// After:
+cmd.CommandText = "SELECT webapi.search_for_stock_items($1::varchar, $2::varchar, $3::numeric, $4::numeric, $5::int, $6::int)";
+```
+
+---
+
 ## Execution order
 
 When re-applying to a fresh database, run in this order:
