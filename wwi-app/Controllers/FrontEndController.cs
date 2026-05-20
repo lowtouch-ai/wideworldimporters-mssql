@@ -81,7 +81,7 @@ namespace wwi_app.Controllers
         {
             await using var conn = await _dataSource.OpenConnectionAsync();
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT webapi.search_for_stock_items($1, $2, $3, $4, $5, $6)";
+            cmd.CommandText = "SELECT webapi.search_for_stock_items($1::varchar, $2::varchar, $3::numeric, $4::numeric, $5::int, $6::int)";
             cmd.Parameters.AddWithValue(name as object ?? DBNull.Value);
             cmd.Parameters.AddWithValue(tag as object ?? DBNull.Value);
             cmd.Parameters.AddWithValue(minPrice as object ?? DBNull.Value);

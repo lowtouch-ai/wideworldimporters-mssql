@@ -28,7 +28,7 @@ BEGIN
             si.Size,
             si.MarketingComments,
             si.CustomFields
-        FROM webapi.stockitems AS si
+        FROM webapi.stock_items AS si
         WHERE (p_name IS NULL OR si.StockItemName ILIKE ('%' || p_name || '%'))
           AND (p_min_price IS NULL OR si.UnitPrice > p_min_price)
           AND (p_max_price IS NULL OR si.UnitPrice < p_max_price)
@@ -38,7 +38,7 @@ BEGIN
         FROM value v
         WHERE (p_tag IS NULL OR EXISTS (
             SELECT 1
-            FROM jsonb_array_elements_text(v.CustomFields->'Tags') AS t(tag)
+            FROM jsonb_array_elements_text(v.CustomFields::jsonb->'Tags') AS t(tag)
             WHERE t.tag = p_tag
         ))
           AND (p_stock_group_id IS NULL OR EXISTS (
@@ -51,7 +51,7 @@ BEGIN
     tag_counts AS (
         SELECT t.tag, COUNT(*) AS Items
         FROM value v
-        CROSS JOIN jsonb_array_elements_text(v.CustomFields->'Tags') AS t(tag)
+        CROSS JOIN jsonb_array_elements_text(v.CustomFields::jsonb->'Tags') AS t(tag)
         GROUP BY t.tag
     )
     SELECT json_build_object(
