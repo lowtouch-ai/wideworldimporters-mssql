@@ -23,6 +23,16 @@ BEGIN
         Continent varchar(30),
         Region varchar(30),
         Subregion varchar(30)
-    );
+    )
+    ON CONFLICT (CountryName) DO UPDATE SET
+        FormalName               = EXCLUDED.FormalName,
+        IsoAlpha3Code            = EXCLUDED.IsoAlpha3Code,
+        IsoNumericCode           = EXCLUDED.IsoNumericCode,
+        CountryType              = EXCLUDED.CountryType,
+        LatestRecordedPopulation = EXCLUDED.LatestRecordedPopulation,
+        Continent                = EXCLUDED.Continent,
+        Region                   = EXCLUDED.Region,
+        Subregion                = EXCLUDED.Subregion,
+        LastEditedBy             = EXCLUDED.LastEditedBy;
 END;
 $$ LANGUAGE plpgsql;

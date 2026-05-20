@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -22,59 +23,18 @@ namespace wwi_app.Controllers
             this._logger = logger;
         }
 
-        public async Task<IActionResult> Login(string username, string password)
+        public IActionResult Login(string returnUrl = "/Dashboard")
         {
-            if (string.IsNullOrEmpty(username))
-            {
-                return Redirect("~/Index");
-            }
-
-            bool isValidUser = false;
-            var claims = new List<Claim>() { new Claim(ClaimTypes.Email, username) };
-
-            try
-            {
-                await using var conn = await _dataSource.OpenConnectionAsync();
-                await using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT * FROM webapi.login($1, $2)";
-                cmd.Parameters.AddWithValue(username);
-                cmd.Parameters.AddWithValue(password);
-                await using var reader = await cmd.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
-                {
-                    isValidUser = true;
-                    claims.Add(new Claim(ClaimTypes.Sid, Convert.ToString(reader["personid"])));
-                    claims.Add(new Claim(ClaimTypes.Name, Convert.ToString(reader["preferredname"])));
-                    if (reader["issalesperson"] != DBNull.Value && Convert.ToBoolean(reader["issalesperson"]))
-                        claims.Add(new Claim(ClaimTypes.Role, "Salesperson"));
-                    if (reader["isemployee"] != DBNull.Value && Convert.ToBoolean(reader["isemployee"]))
-                        claims.Add(new Claim(ClaimTypes.Role, "Employee"));
-                    if (reader["territory"] != DBNull.Value && reader["territory"] != null)
-                        claims.Add(new Claim("Territory", reader["territory"].ToString()));
-                }
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Cannot login user:" + username);
-            }
-
-            if (isValidUser)
-            {
-                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-                await HttpContext.SignInAsync(new ClaimsPrincipal(claimsIdentity));
-                return Redirect("~/Dashboard");
-            }
-            else
-            {
-                _logger.LogWarning("Cannot login user: " + username);
-            }
-            return Redirect("~/Index");
+            return Challenge(new AuthenticationProperties { RedirectUri = returnUrl },
+                OpenIdConnectDefaults.AuthenticationScheme);
         }
 
         public async Task<IActionResult> SignOut()
         {
-            await HttpContext.SignOutAsync();
-            return Redirect("~/Index");
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            await HttpContext.SignOutAsync(OpenIdConnectDefaults.AuthenticationScheme,
+                new AuthenticationProperties { RedirectUri = "/Index" });
+            return new EmptyResult();
         }
 
         public async Task Search(string name, string tag, double? minPrice, double? maxPrice, int? stockItemGroup, int top)

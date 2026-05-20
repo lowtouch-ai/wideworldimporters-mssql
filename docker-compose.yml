@@ -12,7 +12,7 @@ services:
       ASPNETCORE_URLS: http://+:80
       ConnectionStrings__WWI: "Host=postgres_15.1;Database=postgres;Username=postgres;Password=postgres;Application Name=WideWorldImporters"
     ports:
-      - "8083:80"
+      - "3000:80"
     networks:
       - wwi-net
       - agentomatic
