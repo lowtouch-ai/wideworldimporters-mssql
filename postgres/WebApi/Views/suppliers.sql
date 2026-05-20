@@ -9,8 +9,8 @@ SELECT
     s.SupplierID,
     s.SupplierName,
     sc.SupplierCategoryName,
-    pp.FullName AS "PrimaryContact",
-    ap.FullName AS "AlternateContact",
+    pp.FullName AS PrimaryContact,
+    ap.FullName AS AlternateContact,
     s.PhoneNumber,
     s.FaxNumber,
     s.WebsiteURL,
@@ -29,7 +29,7 @@ SELECT
         'type', 'Feature',
         'geometry', json_build_object(
             'type', 'Point',
-            'coordinates', json_build_array(ST_X(s.DeliveryLocation), ST_Y(s.DeliveryLocation))
+            'coordinates', json_build_array(ST_X(s.DeliveryLocation::geometry), ST_Y(s.DeliveryLocation::geometry))
         ),
         'properties', json_build_object(
             'DeliveryMethod', dm.DeliveryMethodName,
@@ -38,7 +38,7 @@ SELECT
             'Province', sp.StateProvinceName,
             'Territory', sp.SalesTerritory
         )
-    ) AS "DeliveryLocation"
+    ) AS DeliveryLocation
 FROM purchasing.suppliers AS s
     LEFT JOIN purchasing.suppliercategories AS sc
         ON s.SupplierCategoryID = sc.SupplierCategoryID

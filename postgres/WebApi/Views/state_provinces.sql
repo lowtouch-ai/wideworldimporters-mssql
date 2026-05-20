@@ -12,7 +12,7 @@ SELECT
     sp.SalesTerritory,
     sp.LatestRecordedPopulation,
     ('{"type": "Feature","geometry":{'
-        || CASE ST_GeometryType(sp.Border)
+        || CASE ST_GeometryType(sp.Border::geometry)
             WHEN 'ST_Polygon' THEN
                 '"type": "Polygon","coordinates":['
                 || REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ST_AsText(sp.Border),'POLYGON ',''),'(','['),')',']'),'], ',']],['),', ','],['),' ',',')
@@ -23,7 +23,7 @@ SELECT
                 || ']'
             ELSE NULL
         END
-        || '}}') AS "Border",
+        || '}}') AS Border,
     c.CountryName
 FROM application.stateprovinces AS sp
     INNER JOIN application.countries AS c

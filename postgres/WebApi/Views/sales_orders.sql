@@ -20,7 +20,7 @@ SELECT
         'type', 'Feature',
         'geometry', json_build_object(
             'type', 'Point',
-            'coordinates', json_build_array(ST_X(c.DeliveryLocation), ST_Y(c.DeliveryLocation))
+            'coordinates', json_build_array(ST_X(c.DeliveryLocation::geometry), ST_Y(c.DeliveryLocation::geometry))
         ),
         'properties', json_build_object(
             'DeliveryMethod', dm.DeliveryMethodName,
@@ -29,10 +29,10 @@ SELECT
             'PostalCode', c.DeliveryPostalCode,
             'Instructions', o.DeliveryInstructions
         )
-    ) AS "DeliveryLocation",
-    sp.FullName AS "SalesPerson",
-    sp.PhoneNumber AS "SalesPersonPhone",
-    sp.EmailAddress AS "SalesPersonEmail"
+    ) AS DeliveryLocation,
+    sp.FullName AS SalesPerson,
+    sp.PhoneNumber AS SalesPersonPhone,
+    sp.EmailAddress AS SalesPersonEmail
 FROM sales.orders o
     INNER JOIN sales.customers c
         ON o.CustomerID = c.CustomerID

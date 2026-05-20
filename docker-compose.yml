@@ -10,9 +10,9 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
-      ConnectionStrings__WWI: "Host=postgres_15.1;Database=postgres;Username=postgres;Password=postgres;Application Name=WideWorldImporters"
+      ConnectionStrings__WWI: "Host=postgres_15.1;Database=wideworldimporters;Username=postgres;Password=postgres;Application Name=WideWorldImporters"
     ports:
-      - "8083:80"
+      - "80:80"
     networks:
       - wwi-net
       - agentomatic
@@ -22,4 +22,4 @@ networks:
     driver: bridge
   agentomatic:
     external: true
-    name: appz-images_agentomatic_net
+    name: appliance_agentomatic_net

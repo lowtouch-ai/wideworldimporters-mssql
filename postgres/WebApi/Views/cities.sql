@@ -15,9 +15,9 @@ SELECT
         'type', 'Feature',
         'geometry', json_build_object(
             'type', 'Point',
-            'coordinates', json_build_array(ST_X(c.Location), ST_Y(c.Location))
+            'coordinates', json_build_array(ST_X(c.Location::geometry), ST_Y(c.Location::geometry))
         )
-    ) AS "Location"
+    ) AS Location
 FROM application.cities c
     INNER JOIN application.stateprovinces sp
         ON c.StateProvinceID = sp.StateProvinceID;

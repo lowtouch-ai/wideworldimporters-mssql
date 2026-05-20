@@ -5,7 +5,7 @@ INSERT INTO application.systemparameters
      ApplicationSettings, LastEditedBy, LastEditedWhen)
 VALUES
     ('Suite 14', '1968 Martin Luther King Junior Drive', 30378,
-     '94129', '',
+     '94129', ST_GeogFromText('POINT(-122.4662 37.7997)'),
      'PO Box 201158', 'Golden Gate Park', 30378, 94129,
      '{
 	"Site": {

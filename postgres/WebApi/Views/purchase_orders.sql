@@ -10,10 +10,10 @@ SELECT
     dm.DeliveryMethodName,
     o.DeliveryMethodID,
     o.SupplierID,
-    c.FullName AS "ContactName",
-    c.PhoneNumber AS "ContactPhone",
-    c.FaxNumber AS "ContactFax",
-    c.EmailAddress AS "ContactEmail"
+    c.FullName AS ContactName,
+    c.PhoneNumber AS ContactPhone,
+    c.FaxNumber AS ContactFax,
+    c.EmailAddress AS ContactEmail
 FROM purchasing.purchaseorders o
     INNER JOIN application.people c
         ON o.ContactPersonID = c.PersonID

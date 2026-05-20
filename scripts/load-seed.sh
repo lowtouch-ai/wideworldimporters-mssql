@@ -3,13 +3,13 @@
 # Run from repo root: bash scripts/load-seed.sh
 
 CONTAINER=postgres_15.1
-PG="docker exec -i $CONTAINER psql -U postgres -d postgres"
+PG="docker exec -i $CONTAINER psql -U postgres -d wideworldimporters"
 SEED_DIR="postgres/seed"
 
 run_script() {
     local file="$1"
     echo -n "  Loading $file ... "
-    result=$(docker exec -i $CONTAINER psql -U postgres -d postgres \
+    result=$(docker exec -i $CONTAINER psql -U postgres -d wideworldimporters \
         --set ON_ERROR_STOP=1 -q 2>&1 < "$file")
     if [ $? -eq 0 ]; then
         echo "✓"
@@ -21,7 +21,7 @@ run_script() {
 
 # Truncate all tables before loading (CASCADE handles FK order)
 echo "Truncating tables..."
-docker exec $CONTAINER psql -U postgres -d postgres -q -c "
+docker exec $CONTAINER psql -U postgres -d wideworldimporters -q -c "
 TRUNCATE
   warehouse.stockitemstockgroups,
   warehouse.stockitemholdings,
@@ -59,7 +59,7 @@ TRUNCATE
 
 # Reset sequences before loading
 echo "Resetting sequences..."
-docker exec $CONTAINER psql -U postgres -d postgres -q -c "
+docker exec $CONTAINER psql -U postgres -d wideworldimporters -q -c "
 SELECT setval('sequences.person_id_seq', 1, false);
 SELECT setval('sequences.country_id_seq', 1, false);
 SELECT setval('sequences.state_province_id_seq', 1, false);
@@ -126,7 +126,7 @@ run_script "$SEED_DIR/pds400-ins-unkown-orderline.sql"
 
 echo ""
 echo "Done. Row counts:"
-docker exec $CONTAINER psql -U postgres -d postgres -c "
+docker exec $CONTAINER psql -U postgres -d wideworldimporters -c "
 SELECT schemaname||'.'||tablename as tbl,
   (xpath('/row/cnt/text()',query_to_xml('SELECT COUNT(*) AS cnt FROM '||schemaname||'.'||tablename,false,true,'')))[1]::text::int AS rows
 FROM pg_tables

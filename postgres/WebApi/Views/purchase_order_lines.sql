@@ -6,7 +6,7 @@ SELECT
     ol.PurchaseOrderID,
     ol.Description,
     ol.IsOrderLineFinalized,
-    si.StockItemName AS "ProductName",
+    si.StockItemName AS ProductName,
     si.Brand,
     si.Size,
     c.ColorName,
