@@ -50,6 +50,79 @@ namespace wwi_app.Controllers
 
         private int GetUserId() => Convert.ToInt32(User.FindFirst(ClaimTypes.Sid)?.Value ?? "0");
 
+        // Parses OData $apply=groupby((Col),aggregate(A mul B with sum as Alias))
+        // and builds a PostgreSQL GROUP BY query against `fromClause`.
+        // Also applies $orderby, $top, $filter when present.
+        private async Task StreamApply(string fromClause)
+        {
+            var apply   = Request.Query["$apply"].ToString();
+            var orderby = Request.Query["$orderby"].ToString();
+            var top     = Request.Query["$top"].ToString();
+            var filter  = Request.Query["$filter"].ToString();
+
+            // Parse: groupby((GroupCol),aggregate(ExprA mul ExprB with sum as Alias))
+            //   or:  groupby((GroupCol),aggregate(ExprA with sum as Alias))
+            var m = Regex.Match(apply,
+                @"groupby\(\((\w+)\),aggregate\((\w+)(?:\s+mul\s+(\w+))?\s+with\s+sum\s+as\s+(\w+)\)\)",
+                RegexOptions.IgnoreCase);
+
+            if (!m.Success)
+            {
+                Response.StatusCode = 400;
+                await Response.WriteAsync("Unsupported $apply expression");
+                return;
+            }
+
+            var groupCol  = m.Groups[1].Value;
+            var aggA      = m.Groups[2].Value;
+            var aggB      = m.Groups[3].Value; // empty when no mul
+            var alias     = m.Groups[4].Value;
+
+            var aggExpr   = string.IsNullOrEmpty(aggB)
+                ? $"SUM({aggA.ToLower()})"
+                : $"SUM({aggA.ToLower()} * {aggB.ToLower()})";
+
+            var whereClause = "";
+            if (!string.IsNullOrEmpty(filter))
+            {
+                // Support: Col ge 'value'  →  col >= 'value'
+                var fm = Regex.Match(filter, @"(\w+)\s+ge\s+'([^']+)'", RegexOptions.IgnoreCase);
+                if (fm.Success)
+                    whereClause = $"WHERE {fm.Groups[1].Value.ToLower()} >= '{fm.Groups[2].Value}'";
+            }
+
+            var orderClause = "";
+            if (!string.IsNullOrEmpty(orderby))
+            {
+                var om = Regex.Match(orderby, @"(\w+)(?:\s+(asc|desc))?", RegexOptions.IgnoreCase);
+                if (om.Success)
+                {
+                    var dir = om.Groups[2].Success ? om.Groups[2].Value.ToUpper() : "ASC";
+                    // If ordering by the aggregated column, use the alias (it's not in GROUP BY)
+                    var orderCol = om.Groups[1].Value.Equals(aggA, StringComparison.OrdinalIgnoreCase)
+                        ? $"\"{alias}\""
+                        : om.Groups[1].Value.ToLower();
+                    orderClause = $"ORDER BY {orderCol} {dir}";
+                }
+            }
+
+            var limitClause = string.IsNullOrEmpty(top) ? "" : $"LIMIT {int.Parse(top)}";
+
+            var sql = $@"SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (
+                SELECT {groupCol.ToLower()} AS ""{groupCol}"", {aggExpr} AS ""{alias}""
+                FROM {fromClause}
+                {whereClause}
+                GROUP BY {groupCol.ToLower()}
+                {orderClause}
+                {limitClause}
+            ) t";
+
+            await using var conn = await _dataSource.OpenConnectionAsync();
+            var json = await conn.ExecuteScalarAsync<string>(sql);
+            Response.ContentType = "application/json";
+            await Response.WriteAsync($"{{\"value\":{json ?? "[]"}}}");
+        }
+
 
         [HttpGet]
         public async Task SalesOrders(int? id)
@@ -87,7 +160,9 @@ namespace wwi_app.Controllers
         [HttpGet]
         public async Task SalesOrderLines(int? id)
         {
-            if (id == null)
+            if (id == null && Request.Query.ContainsKey("$apply"))
+                await StreamApply("webapi.sales_order_lines");
+            else if (id == null)
                 await StreamJson("SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (SELECT OrderLineID,OrderID,Description,Quantity,UnitPrice,TaxRate,ProductName,Brand,Size,ColorName,PackageTypeName,PickingCompletedWhen FROM webapi.sales_order_lines) t");
             else
                 await StreamJson("SELECT row_to_json(t)::text FROM (SELECT OrderLineID,OrderID,Description,Quantity,UnitPrice,TaxRate,ProductName,Brand,Size,ColorName,PackageTypeName,PickingCompletedWhen FROM webapi.sales_order_lines WHERE OrderLineID=@id) t", new { id });
@@ -153,7 +228,9 @@ namespace wwi_app.Controllers
         [HttpGet]
         public async Task PurchaseOrderLines(int? id)
         {
-            if (id == null)
+            if (id == null && Request.Query.ContainsKey("$apply"))
+                await StreamApply("webapi.purchase_order_lines");
+            else if (id == null)
                 await StreamJson("SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (SELECT PurchaseOrderLineID,PurchaseOrderID,Description,IsOrderLineFinalized,ProductName,Brand,Size,ColorName,PackageTypeName,OrderedOuters,ReceivedOuters,ExpectedUnitPricePerOuter FROM webapi.purchase_order_lines) t");
             else
                 await StreamJson("SELECT row_to_json(t)::text FROM (SELECT PurchaseOrderLineID,PurchaseOrderID,Description,IsOrderLineFinalized,ProductName,Brand,Size,ColorName,PackageTypeName,OrderedOuters,ReceivedOuters,ExpectedUnitPricePerOuter FROM webapi.purchase_order_lines WHERE PurchaseOrderLineID=@id) t", new { id });
@@ -318,7 +395,9 @@ namespace wwi_app.Controllers
         [HttpGet]
         public async Task Customers(int? id)
         {
-            if (id == null)
+            if (id == null && Request.Query.ContainsKey("$apply"))
+                await StreamApply("webapi.customers");
+            else if (id == null)
                 await StreamJson("SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (SELECT CustomerID,CustomerName,AccountOpenedDate,CustomerCategoryName,PrimaryContact,AlternateContact,PhoneNumber,FaxNumber,WebsiteURL,PostalAddressLine1,PostalAddressLine2,PostalCity,PostalCityID,PostalPostalCode,CreditLimit,IsOnCreditHold,IsStatementSent,PaymentDays,RunPosition,StandardDiscountPercentage,BuyingGroupName,BuyingGroupID,BillToCustomerID,CustomerCategoryID,PrimaryContactPersonID,AlternateContactPersonID FROM webapi.customers) t");
             else
                 await StreamJson("SELECT row_to_json(t)::text FROM (SELECT CustomerID,CustomerName,AccountOpenedDate,CustomerCategoryName,PrimaryContact,AlternateContact,PhoneNumber,FaxNumber,WebsiteURL,PostalAddressLine1,PostalAddressLine2,PostalCity,PostalCityID,PostalPostalCode,CreditLimit,IsOnCreditHold,IsStatementSent,PaymentDays,RunPosition,StandardDiscountPercentage,BuyingGroupName,BuyingGroupID,BillToCustomerID,CustomerCategoryID,PrimaryContactPersonID,AlternateContactPersonID FROM webapi.customers WHERE CustomerID=@id) t", new { id });
