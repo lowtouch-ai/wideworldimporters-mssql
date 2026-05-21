@@ -43,43 +43,80 @@ Expected: 100 orders, 500 order lines, 219 stock items, 14 customers, etc.
 
 ## Option B — Full MSSQL migration (~73k orders)
 
-### Prerequisites
-- `postgres_15.1` container running
-- `wwi_mssql` container present (volume must still exist)
-- Schema already applied via Option A
-- Python 3 with packages: `pip install pymssql psycopg2-binary`
-- `dimitri/pgloader` Docker image: `docker pull dimitri/pgloader`
+The server has no MSSQL image — so the workflow is:
+1. **Export** SQL files locally (where `wwi_mssql` runs)
+2. **Copy** the export folder to the server
+3. **Load** on the server using `load-export.sh`
 
-### Steps
+---
 
-**1. Start the MSSQL container:**
+### Step 1 — Export from MSSQL locally
+
+Run this on your local machine (where `wwi_mssql` is running):
+
 ```bash
-docker start wwi_mssql
-# Wait ~30s for SQL Server to be ready
+mkdir -p export/sql
+docker run --rm \
+  --network wideworldimporters-mssql_wwi-net \
+  -v "$(pwd)/scripts:/scripts" \
+  -v "$(pwd)/export:/export" \
+  -e MSSQL_HOST=172.20.0.3 \
+  python:3.12-slim \
+  bash -c "pip install -q pymssql && python3 /scripts/export_to_sql.py"
 ```
 
-**2. Apply the schema first (if not done):**
+This produces `export/sql/` — 31 `.sql` files (~167MB), one per table, in FK dependency order.
+
+> Already done — the `export/sql/` folder is in this repo.
+
+---
+
+### Step 2 — Copy export folder to server
+
+```bash
+scp -r export/sql/ user@your-server:/path/to/wideworldimporters-mssql/export/
+```
+
+Or if using the server's file manager / deployment pipeline, copy the entire `export/` folder.
+
+---
+
+### Step 3 — Apply schema on the server
+
+SSH into the server and run from the repo root:
+
 ```bash
 bash scripts/apply-schema.sh --no-seed
 ```
 
-**3. Run the migration:**
+---
+
+### Step 4 — Load the exported data on the server
+
 ```bash
-bash scripts/run-migration.sh
+bash scripts/load-export.sh
 ```
 
 This script:
-- Resolves both container IPs dynamically (no hardcoded IPs)
-- Waits for MSSQL to be ready
-- Phase 1: `pgloader` bulk-copies all tables
-- Phase 2: `migrate_data.py` re-migrates tables with generated columns (People, StockItems, CustomerTransactions, etc.) that pgloader can't handle
-- Phase 3: Syncs all sequences to max IDs
+- Loads all 31 SQL files into `postgres_15.1` in order
+- Disables FK checks during load, re-enables after
+- Syncs all sequences to max IDs
+- Reports final row counts
 
-**4. Verify:**
-```bash
-docker exec postgres_15.1 psql -U postgres -c "SELECT COUNT(*) FROM sales.orders;"
-# Expect: ~73,595
+**Expected output:**
 ```
+orders               | 73,595
+orderlines           | 231,412
+invoices             |  70,510
+invoicelines         | 228,265
+customertransactions |  97,147
+```
+
+---
+
+### Re-exporting after MSSQL data changes
+
+If the MSSQL source data changes, re-run Step 1 and repeat Steps 2–4. Each SQL file starts with `TRUNCATE ... CASCADE` so it's safe to reload.
 
 ---
 
