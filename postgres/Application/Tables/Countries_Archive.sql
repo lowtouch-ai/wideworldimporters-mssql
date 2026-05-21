@@ -11,7 +11,7 @@ CREATE TABLE application.countries_archive (
     Continent                VARCHAR(30)  NOT NULL,
     Region                   VARCHAR(30)  NOT NULL,
     Subregion                VARCHAR(30)  NOT NULL,
-    Border                   geography    NULL,
+    Border                   TEXT          NULL,
     LastEditedBy             INTEGER      NOT NULL,
     ValidFrom                TIMESTAMP(6) NOT NULL,
     ValidTo                  TIMESTAMP(6) NOT NULL

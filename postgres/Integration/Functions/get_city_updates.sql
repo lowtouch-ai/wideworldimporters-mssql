@@ -17,7 +17,7 @@ CREATE OR REPLACE FUNCTION integration.get_city_updates(
     "Sales Territory" varchar(50),
     "Region" varchar(30),
     "Subregion" varchar(30),
-    "Location" geography,
+    "Location" TEXT,
     "Latest Recorded Population" bigint,
     "Valid From" timestamp(6),
     "Valid To" timestamp(6)
@@ -39,7 +39,7 @@ BEGIN
         "Sales Territory" varchar(50),
         "Region" varchar(30),
         "Subregion" varchar(30),
-        "Location" geography,
+        "Location" TEXT,
         "Latest Recorded Population" bigint,
         "Valid From" timestamp(6),
         "Valid To" timestamp(6)

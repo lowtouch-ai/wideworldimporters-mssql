@@ -9,7 +9,7 @@ SELECT
     ol.UnitPrice,
     ol.TaxRate,
     ol.PickingCompletedWhen,
-    si.StockItemName AS "ProductName",
+    si.StockItemName AS ProductName,
     si.Brand,
     si.Size,
     c.ColorName,

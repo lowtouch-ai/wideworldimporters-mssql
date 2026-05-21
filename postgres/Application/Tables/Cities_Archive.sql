@@ -4,7 +4,7 @@ CREATE TABLE application.cities_archive (
     CityID                   INTEGER      NOT NULL,
     CityName                 VARCHAR(50)  NOT NULL,
     StateProvinceID          INTEGER      NOT NULL,
-    Location                 geography    NULL,
+    Location                 TEXT          NULL,
     LatestRecordedPopulation BIGINT       NULL,
     LastEditedBy             INTEGER      NOT NULL,
     ValidFrom                TIMESTAMP(6) NOT NULL,

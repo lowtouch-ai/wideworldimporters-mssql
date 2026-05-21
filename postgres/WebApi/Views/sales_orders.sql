@@ -16,23 +16,10 @@ SELECT
     c.PhoneNumber,
     c.FaxNumber,
     c.WebsiteURL,
-    json_build_object(
-        'type', 'Feature',
-        'geometry', json_build_object(
-            'type', 'Point',
-            'coordinates', json_build_array(ST_X(c.DeliveryLocation), ST_Y(c.DeliveryLocation))
-        ),
-        'properties', json_build_object(
-            'DeliveryMethod', dm.DeliveryMethodName,
-            'AddressLine1', c.DeliveryAddressLine1,
-            'AddressLine2', c.DeliveryAddressLine2,
-            'PostalCode', c.DeliveryPostalCode,
-            'Instructions', o.DeliveryInstructions
-        )
-    ) AS "DeliveryLocation",
-    sp.FullName AS "SalesPerson",
-    sp.PhoneNumber AS "SalesPersonPhone",
-    sp.EmailAddress AS "SalesPersonEmail"
+    NULL::text AS DeliveryLocation,
+    sp.FullName AS SalesPerson,
+    sp.PhoneNumber AS SalesPersonPhone,
+    sp.EmailAddress AS SalesPersonEmail
 FROM sales.orders o
     INNER JOIN sales.customers c
         ON o.CustomerID = c.CustomerID

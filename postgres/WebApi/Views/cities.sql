@@ -11,13 +11,7 @@ SELECT
     c.LatestRecordedPopulation,
     c.StateProvinceID,
     sp.StateProvinceName,
-    json_build_object(
-        'type', 'Feature',
-        'geometry', json_build_object(
-            'type', 'Point',
-            'coordinates', json_build_array(ST_X(c.Location), ST_Y(c.Location))
-        )
-    ) AS "Location"
+    NULL::text AS Location
 FROM application.cities c
     INNER JOIN application.stateprovinces sp
         ON c.StateProvinceID = sp.StateProvinceID;

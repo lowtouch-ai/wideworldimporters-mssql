@@ -9,7 +9,7 @@ CREATE TABLE application.systemparameters (
     DeliveryAddressLine2 VARCHAR(60)   NULL,
     DeliveryCityID       INTEGER       NOT NULL,
     DeliveryPostalCode   VARCHAR(10)   NOT NULL,
-    DeliveryLocation     geography     NOT NULL,
+    DeliveryLocation     TEXT          NULL,
     PostalAddressLine1   VARCHAR(60)   NOT NULL,
     PostalAddressLine2   VARCHAR(60)   NULL,
     PostalCityID         INTEGER       NOT NULL,

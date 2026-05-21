@@ -7,7 +7,7 @@ CREATE TABLE application.cities (
     CityID                   INTEGER       DEFAULT nextval('sequences.city_id_seq') NOT NULL,
     CityName                 VARCHAR(50)   NOT NULL,
     StateProvinceID          INTEGER       NOT NULL,
-    Location                 geography     NULL,
+    Location                 TEXT          NULL,
     LatestRecordedPopulation BIGINT        NULL,
     LastEditedBy             INTEGER       NOT NULL,
     ValidFrom                TIMESTAMP(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP,

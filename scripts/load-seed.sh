@@ -126,6 +126,13 @@ run_script "$SEED_DIR/pds280-ins-purchasing-purchaseorders.sql"
 run_script "$SEED_DIR/pds290-ins-purchasing-purchaseorderlines.sql"
 run_script "$SEED_DIR/pds300-ins-purchasing-suppliertransactions.sql"
 
+# Sales transactional data (depends on customers, stock items, people, delivery methods)
+run_script "$SEED_DIR/pds310-ins-sales-orders.sql"
+run_script "$SEED_DIR/pds320-ins-sales-orderlines.sql"
+run_script "$SEED_DIR/pds330-ins-sales-invoices.sql"
+run_script "$SEED_DIR/pds340-ins-sales-invoicelines.sql"
+run_script "$SEED_DIR/pds350-ins-sales-customertransactions.sql"
+
 # Unknown order line
 run_script "$SEED_DIR/pds400-ins-unkown-orderline.sql"
 

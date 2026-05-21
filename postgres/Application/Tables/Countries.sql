@@ -14,7 +14,7 @@ CREATE TABLE application.countries (
     Continent                VARCHAR(30)   NOT NULL,
     Region                   VARCHAR(30)   NOT NULL,
     Subregion                VARCHAR(30)   NOT NULL,
-    Border                   geography     NULL,
+    Border                   TEXT          NULL,
     LastEditedBy             INTEGER       NOT NULL,
     ValidFrom                TIMESTAMP(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ValidTo                  TIMESTAMP(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -30,7 +30,7 @@ CREATE TABLE sales.customers (
     DeliveryAddressLine1       VARCHAR(60)      NOT NULL,
     DeliveryAddressLine2       VARCHAR(60)      NULL,
     DeliveryPostalCode         VARCHAR(10)      NOT NULL,
-    DeliveryLocation           geography        NULL,
+    DeliveryLocation           TEXT          NULL,
     PostalAddressLine1         VARCHAR(60)      NOT NULL,
     PostalAddressLine2         VARCHAR(60)      NULL,
     PostalPostalCode           VARCHAR(10)      NOT NULL,

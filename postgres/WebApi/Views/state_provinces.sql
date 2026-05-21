@@ -11,19 +11,7 @@ SELECT
     sp.CountryID,
     sp.SalesTerritory,
     sp.LatestRecordedPopulation,
-    ('{"type": "Feature","geometry":{'
-        || CASE ST_GeometryType(sp.Border)
-            WHEN 'ST_Polygon' THEN
-                '"type": "Polygon","coordinates":['
-                || REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ST_AsText(sp.Border),'POLYGON ',''),'(','['),')',']'),'], ',']],['),', ','],['),' ',',')
-                || ']'
-            WHEN 'ST_MultiPolygon' THEN
-                '"type": "MultiPolygon","coordinates":['
-                || REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ST_AsText(sp.Border),'MULTIPOLYGON ',''),'(','['),')',']'),'], ',']],['),', ','],['),' ',',')
-                || ']'
-            ELSE NULL
-        END
-        || '}}') AS "Border",
+    NULL::text AS Border,
     c.CountryName
 FROM application.stateprovinces AS sp
     INNER JOIN application.countries AS c

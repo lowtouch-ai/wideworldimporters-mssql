@@ -9,8 +9,8 @@ SELECT
     c.CustomerID,
     c.CustomerName,
     sc.CustomerCategoryName,
-    pp.FullName AS "PrimaryContact",
-    ap.FullName AS "AlternateContact",
+    pp.FullName AS PrimaryContact,
+    ap.FullName AS AlternateContact,
     c.PhoneNumber,
     c.FaxNumber,
     c.WebsiteURL,
@@ -18,7 +18,7 @@ SELECT
     c.PostalAddressLine2,
     c.PostalPostalCode,
     c.PostalCityID,
-    pc.CityName AS "PostalCity",
+    pc.CityName AS PostalCity,
     c.AccountOpenedDate,
     c.CreditLimit,
     c.IsOnCreditHold,
@@ -27,19 +27,7 @@ SELECT
     c.RunPosition,
     c.StandardDiscountPercentage,
     bg.BuyingGroupName,
-    json_build_object(
-        'type', 'Feature',
-        'geometry', json_build_object(
-            'type', 'Point',
-            'coordinates', json_build_array(ST_X(c.DeliveryLocation), ST_Y(c.DeliveryLocation))
-        ),
-        'properties', json_build_object(
-            'DeliveryMethod', dm.DeliveryMethodName,
-            'CityName', pc.CityName,
-            'Province', sp.StateProvinceName,
-            'Territory', sp.SalesTerritory
-        )
-    ) AS "DeliveryLocation",
+    NULL::text AS DeliveryLocation,
     c.PrimaryContactPersonID,
     c.AlternateContactPersonID,
     c.BillToCustomerID,

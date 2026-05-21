@@ -9,7 +9,7 @@ CREATE TABLE application.stateprovinces (
     StateProvinceName        VARCHAR(50)   NOT NULL,
     CountryID                INTEGER       NOT NULL,
     SalesTerritory           VARCHAR(50)   NOT NULL,
-    Border                   geography     NULL,
+    Border                   TEXT          NULL,
     LatestRecordedPopulation BIGINT        NULL,
     LastEditedBy             INTEGER       NOT NULL,
     ValidFrom                TIMESTAMP(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP,
