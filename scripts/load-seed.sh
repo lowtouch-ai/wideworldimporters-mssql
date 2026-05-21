@@ -121,6 +121,11 @@ run_script "$SEED_DIR/pds260-ins-warehouse-stockitemstockgroups.sql"
 # System parameters
 run_script "$SEED_DIR/pds270-ins-app-systemparameters.sql"
 
+# Purchasing transactional data (depends on suppliers, delivery methods, people, stock items)
+run_script "$SEED_DIR/pds280-ins-purchasing-purchaseorders.sql"
+run_script "$SEED_DIR/pds290-ins-purchasing-purchaseorderlines.sql"
+run_script "$SEED_DIR/pds300-ins-purchasing-suppliertransactions.sql"
+
 # Unknown order line
 run_script "$SEED_DIR/pds400-ins-unkown-orderline.sql"
 

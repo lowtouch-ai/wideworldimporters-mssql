@@ -7,6 +7,8 @@ services:
       context: ./wwi-app
       dockerfile: Dockerfile
     container_name: wwi_app
+    env_file:
+      - .env
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
