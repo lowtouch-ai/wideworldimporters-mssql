@@ -11,7 +11,7 @@
 set -euo pipefail
 
 CONTAINER=postgres_15.1
-PG_CMD="docker exec -i $CONTAINER psql -U postgres -d postgres --set ON_ERROR_STOP=1 -q"
+PG_CMD="docker exec -i $CONTAINER psql -U postgres -d wideworldimporters --set ON_ERROR_STOP=1 -q"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NO_SEED=false
 
@@ -26,7 +26,7 @@ done
 run() {
     local file="$REPO_ROOT/$1"
     echo -n "  $(basename "$file") ... "
-    result=$(docker exec -i "$CONTAINER" psql -U postgres -d postgres -q 2>&1 < "$file")
+    result=$(docker exec -i "$CONTAINER" psql -U postgres -d wideworldimporters -q 2>&1 < "$file")
     local exit_code=$?
     if [ $exit_code -eq 0 ]; then
         echo "✓"
@@ -45,7 +45,7 @@ run_glob() {
     for f in $REPO_ROOT/$pattern; do
         [ -f "$f" ] || continue
         echo -n "  $(basename "$f") ... "
-        result=$(docker exec -i "$CONTAINER" psql -U postgres -d postgres -q 2>&1 < "$f")
+        result=$(docker exec -i "$CONTAINER" psql -U postgres -d wideworldimporters -q 2>&1 < "$f")
         local exit_code=$?
         if [ $exit_code -eq 0 ]; then
             echo "✓"
@@ -76,13 +76,13 @@ echo ""
 # ── phase 1: extensions ───────────────────────────────────────────────────────
 
 echo "=== Phase 1: Extensions ==="
-if docker exec -i "$CONTAINER" psql -U postgres -d postgres -q \
+if docker exec -i "$CONTAINER" psql -U postgres -d wideworldimporters -q \
     -c "CREATE EXTENSION IF NOT EXISTS postgis;" 2>/dev/null; then
     echo "  postgis ✓"
 else
     echo "  postgis ⚠ (not installed on this Postgres image — geography columns will fail)"
 fi
-if docker exec -i "$CONTAINER" psql -U postgres -d postgres -q \
+if docker exec -i "$CONTAINER" psql -U postgres -d wideworldimporters -q \
     -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;" 2>/dev/null; then
     echo "  pgcrypto ✓"
 else
@@ -195,7 +195,7 @@ echo ""
 if [ "$NO_SEED" = true ]; then
     echo "=== Phase 8: Seed (skipped via --no-seed) ==="
 else
-    PO_COUNT=$(docker exec "$CONTAINER" psql -U postgres -d postgres -tAq \
+    PO_COUNT=$(docker exec "$CONTAINER" psql -U postgres -d wideworldimporters -tAq \
         -c "SELECT COUNT(*) FROM purchasing.purchaseorders" 2>/dev/null || echo "0")
     if [ "$PO_COUNT" -gt 0 ]; then
         echo "=== Phase 8: Seed (skipped — DB already has $PO_COUNT purchase orders) ==="
@@ -215,7 +215,7 @@ echo ""
 # ── summary ───────────────────────────────────────────────────────────────────
 
 echo "=== Done ==="
-docker exec "$CONTAINER" psql -U postgres -d postgres -q -c "
+docker exec "$CONTAINER" psql -U postgres -d wideworldimporters -q -c "
 SELECT schemaname||'.'||tablename AS table,
   (xpath('/row/cnt/text()', query_to_xml(
     'SELECT COUNT(*) AS cnt FROM '||schemaname||'.'||tablename, false, true, ''

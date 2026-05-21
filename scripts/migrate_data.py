@@ -12,7 +12,7 @@ MSSQL = dict(server=os.getenv("MSSQL_HOST", "172.20.0.3"), port=int(os.getenv("M
              database=os.getenv("MSSQL_DB", "WideWorldImporters"))
 PG    = dict(host=os.getenv("PG_HOST", "172.19.0.5"), port=int(os.getenv("PG_PORT", 5432)),
              user=os.getenv("PG_USER", "postgres"), password=os.getenv("PG_PASS", "postgres"),
-             dbname=os.getenv("PG_DB", "postgres"))
+             dbname=os.getenv("PG_DB", "wideworldimporters"))
 
 # All tables in FK dependency order (leaves first, dependents last)
 TABLES = [
