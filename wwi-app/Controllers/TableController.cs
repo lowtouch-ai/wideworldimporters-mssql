@@ -1,107 +1,59 @@
-﻿using System.Threading.Tasks;
+using Dapper;
 using Microsoft.AspNetCore.Mvc;
-using Belgrade.SqlClient;
-using MsSql.RestApi;
+using Newtonsoft.Json;
+using Npgsql;
+using System.Threading.Tasks;
 
 namespace wwi_app.Controllers
 {
     public class TableController : Controller
     {
-        IQueryPipe sqlQuery = null;
+        private readonly NpgsqlDataSource _db;
 
-        public TableController(IQueryPipe sqlQueryService)
+        public TableController(NpgsqlDataSource db)
         {
-            this.sqlQuery = sqlQueryService;
+            _db = db;
         }
 
-		
-        private static readonly TableSpec salesorders = new TableSpec("WebApi","SalesOrders", "OrderDate,CustomerPurchaseOrderNumber,CustomerName,ExpectedDeliveryDate,PhoneNumber,SalesPerson,OrderID");
-        public async Task SalesOrders()
+        private async Task WriteJson(string sql)
         {
-            await this
-				.Table(salesorders)
-				.Process(this.sqlQuery);
+            await using var conn = await _db.OpenConnectionAsync();
+            var rows = await conn.QueryAsync(sql);
+            Response.ContentType = "application/json";
+            await Response.WriteAsync(JsonConvert.SerializeObject(new { value = rows }));
         }
-				
-        private static readonly TableSpec purchaseorders = new TableSpec("WebApi","PurchaseOrders", "OrderDate,SupplierReference,ExpectedDeliveryDate,ContactName,ContactPhone,IsOrderFinalized,PurchaseOrderID");
-        public async Task PurchaseOrders()
-        {
-            await this
-				.Table(purchaseorders)
-				.Process(this.sqlQuery);
-        }
-				
-        private static readonly TableSpec invoices = new TableSpec("WebApi","Invoices", "InvoiceDate,CustomerPurchaseOrderNumber,CustomerName,SalesPersonName,ContactName,ContactPhone,SalesPersonEmail,InvoiceID");
-        public async Task Invoices()
-        {
-            await this
-				.Table(invoices)
-				.Process(this.sqlQuery);
-        }
-				
-        private static readonly TableSpec customertransactions = new TableSpec("WebApi","CustomerTransactions", "TransactionDate,TransactionAmount,IsFinalized,CustomerName,TransactionTypeName,PaymentMethodName,InvoiceDate,CustomerTransactionID");
-        public async Task CustomerTransactions()
-        {
-            await this
-				.Table(customertransactions)
-				.Process(this.sqlQuery);
-        }
-		
-        private static readonly TableSpec suppliertransactions = new TableSpec("WebApi","SupplierTransactions", "TransactionDate,TransactionAmount,IsFinalized,SupplierName,TransactionTypeName,PaymentMethodName,SupplierTransactionID");
-        public async Task SupplierTransactions()
-        {
-            await this
-				.Table(suppliertransactions)
-				.Process(this.sqlQuery);
-        }
-		
-        private static readonly TableSpec customers = new TableSpec("WebApi","Customers", "CustomerName,CustomerCategoryName,PhoneNumber,FaxNumber,BuyingGroupName,CustomerID");
-        public async Task Customers()
-        {
-            await this
-				.Table(customers)
-				.Process(this.sqlQuery);
-        }
-		
-        private static readonly TableSpec suppliers = new TableSpec("WebApi","Suppliers", "SupplierName,SupplierCategoryName,PhoneNumber,FaxNumber,PrimaryContact,SupplierID");
-        public async Task Suppliers()
-        {
-            await this
-				.Table(suppliers)
-				.Process(this.sqlQuery);
-        }
-		
-        private static readonly TableSpec countries = new TableSpec("WebApi","Countries", "FormalName,Subregion,Region,Continent,LatestRecordedPopulation,CountryID");
-        public async Task Countries()
-        {
-            await this
-				.Table(countries)
-				.Process(this.sqlQuery);
-        }
-		
-        private static readonly TableSpec cities = new TableSpec("WebApi","Cities", "CityName,LatestRecordedPopulation,StateProvinceName,CityID");
-        public async Task Cities()
-        {
-            await this
-				.Table(cities)
-				.Process(this.sqlQuery);
-        }
-		
-        private static readonly TableSpec stateprovinces = new TableSpec("WebApi","StateProvinces", "StateProvinceName,StateProvinceCode,SalesTerritory,LatestRecordedPopulation,CountryName,StateProvinceID");
-        public async Task StateProvinces()
-        {
-            await this
-				.Table(stateprovinces)
-				.Process(this.sqlQuery);
-        }
-		
-        private static readonly TableSpec stockitems = new TableSpec("WebApi","StockItems", "StockItemName,SupplierName,UnitPrice,TaxRate,RecommendedRetailPrice,StockItemID");
-        public async Task StockItems()
-        {
-            await this
-				.Table(stockitems)
-				.Process(this.sqlQuery);
-        }
-																		    }
+
+        public async Task SalesOrders() => await WriteJson(
+            "SELECT OrderDate, CustomerPurchaseOrderNumber, CustomerName, ExpectedDeliveryDate, PhoneNumber, SalesPerson, OrderID FROM webapi.sales_orders");
+
+        public async Task PurchaseOrders() => await WriteJson(
+            "SELECT OrderDate, SupplierReference, ExpectedDeliveryDate, ContactName, ContactPhone, IsOrderFinalized, PurchaseOrderID FROM webapi.purchase_orders");
+
+        public async Task Invoices() => await WriteJson(
+            "SELECT InvoiceDate, CustomerPurchaseOrderNumber, CustomerName, SalesPersonName, ContactName, ContactPhone, SalesPersonEmail, InvoiceID FROM webapi.invoices");
+
+        public async Task CustomerTransactions() => await WriteJson(
+            "SELECT TransactionDate, TransactionAmount, IsFinalized, CustomerName, TransactionTypeName, PaymentMethodName, InvoiceDate, CustomerTransactionID FROM webapi.customer_transactions");
+
+        public async Task SupplierTransactions() => await WriteJson(
+            "SELECT TransactionDate, TransactionAmount, IsFinalized, SupplierName, TransactionTypeName, PaymentMethodName, SupplierTransactionID FROM webapi.supplier_transactions");
+
+        public async Task Customers() => await WriteJson(
+            "SELECT CustomerName, CustomerCategoryName, PhoneNumber, FaxNumber, BuyingGroupName, CustomerID FROM webapi.customers");
+
+        public async Task Suppliers() => await WriteJson(
+            "SELECT SupplierName, SupplierCategoryName, PhoneNumber, FaxNumber, PrimaryContact, SupplierID FROM webapi.suppliers");
+
+        public async Task Countries() => await WriteJson(
+            "SELECT FormalName, Subregion, Region, Continent, LatestRecordedPopulation, CountryID FROM webapi.countries");
+
+        public async Task Cities() => await WriteJson(
+            "SELECT CityName, LatestRecordedPopulation, StateProvinceName, CityID FROM webapi.cities");
+
+        public async Task StateProvinces() => await WriteJson(
+            "SELECT StateProvinceName, StateProvinceCode, SalesTerritory, LatestRecordedPopulation, CountryName, StateProvinceID FROM webapi.state_provinces");
+
+        public async Task StockItems() => await WriteJson(
+            "SELECT StockItemName, SupplierName, UnitPrice, TaxRate, RecommendedRetailPrice, StockItemID FROM webapi.stock_items");
+    }
 }
-
