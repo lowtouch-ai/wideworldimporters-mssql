@@ -82,13 +82,20 @@ namespace wwi_app.Controllers
                 ? $"SUM({aggA.ToLower()})"
                 : $"SUM({aggA.ToLower()} * {aggB.ToLower()})";
 
-            var whereClause = "";
+            // Support: Col ge 'value'  →  WHERE col >= 'value' (table col) or HAVING (aggregate alias)
+            var filterClause = "";
+            var havingClause = "";
             if (!string.IsNullOrEmpty(filter))
             {
-                // Support: Col ge 'value'  →  col >= 'value'
                 var fm = Regex.Match(filter, @"(\w+)\s+ge\s+'([^']+)'", RegexOptions.IgnoreCase);
                 if (fm.Success)
-                    whereClause = $"WHERE {fm.Groups[1].Value.ToLower()} >= '{fm.Groups[2].Value}'";
+                {
+                    var filterCol = fm.Groups[1].Value;
+                    if (filterCol.Equals(alias, StringComparison.OrdinalIgnoreCase))
+                        havingClause = $"HAVING {aggExpr} >= '{fm.Groups[2].Value}'";
+                    else
+                        filterClause = $"WHERE {filterCol.ToLower()} >= '{fm.Groups[2].Value}'";
+                }
             }
 
             var orderClause = "";
@@ -98,8 +105,9 @@ namespace wwi_app.Controllers
                 if (om.Success)
                 {
                     var dir = om.Groups[2].Success ? om.Groups[2].Value.ToUpper() : "ASC";
-                    // If ordering by the aggregated column, use the alias (it's not in GROUP BY)
-                    var orderCol = om.Groups[1].Value.Equals(aggA, StringComparison.OrdinalIgnoreCase)
+                    // Ordering by the aggregate alias: must quote it; table column: lowercase
+                    var orderCol = om.Groups[1].Value.Equals(alias, StringComparison.OrdinalIgnoreCase)
+                                || om.Groups[1].Value.Equals(aggA, StringComparison.OrdinalIgnoreCase)
                         ? $"\"{alias}\""
                         : om.Groups[1].Value.ToLower();
                     orderClause = $"ORDER BY {orderCol} {dir}";
@@ -111,8 +119,9 @@ namespace wwi_app.Controllers
             var sql = $@"SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (
                 SELECT {groupCol.ToLower()} AS ""{groupCol}"", {aggExpr} AS ""{alias}""
                 FROM {fromClause}
-                {whereClause}
+                {filterClause}
                 GROUP BY {groupCol.ToLower()}
+                {havingClause}
                 {orderClause}
                 {limitClause}
             ) t";

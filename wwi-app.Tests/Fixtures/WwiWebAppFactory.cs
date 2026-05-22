@@ -21,16 +21,7 @@ public class WwiWebAppFactory : WebApplicationFactory<App.Startup>
             .UseEnvironment("Testing")
             .UseContentRoot(GetContentRoot())
             .UseStartup<App.Startup>()
-            .UseTestServer()
-            .ConfigureServices(services =>
-            {
-                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(NpgsqlDataSource));
-                if (descriptor != null)
-                    services.Remove(descriptor);
-
-                var dataSource = new NpgsqlDataSourceBuilder(DockerPostgresFixture.ConnectionString).Build();
-                services.AddSingleton(dataSource);
-            });
+            .UseTestServer();
     }
 
     private static string GetContentRoot()

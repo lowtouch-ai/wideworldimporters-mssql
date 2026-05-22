@@ -10,8 +10,11 @@ namespace wwi_app.Tests.Fixtures;
 /// </summary>
 public class DockerPostgresFixture : IAsyncLifetime
 {
-    public const string ConnectionString =
-        "Host=postgres_15.1;Port=5432;Database=postgres;Username=postgres;Password=postgres";
+    // Default: bridge IP for WSL2 host runs.
+    // Override via POSTGRES_TEST_HOST env var (e.g. "postgres_15.1" when running inside Docker).
+    public static readonly string ConnectionString =
+        $"Host={Environment.GetEnvironmentVariable("POSTGRES_TEST_HOST") ?? "172.19.0.8"};" +
+        "Port=5432;Database=postgres;Username=postgres;Password=postgres";
 
     public NpgsqlDataSource DataSource { get; private set; } = null!;
 
