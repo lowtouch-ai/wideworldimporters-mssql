@@ -8,14 +8,14 @@ CREATE OR REPLACE FUNCTION webapi.update_city_from_json(
 ) RETURNS void AS $$
 BEGIN
     UPDATE application.cities SET
-        CityName                 = COALESCE(json."CityName",        application.cities.CityName),
-        StateProvinceID          = COALESCE(json."StateProvinceID", application.cities.StateProvinceID),
-        LatestRecordedPopulation = json."LatestRecordedPopulation",
-        LastEditedBy             = p_user_id
+        CityName = json.CityName,
+        StateProvinceID = json.StateProvinceID,
+        LatestRecordedPopulation = json.LatestRecordedPopulation,
+        LastEditedBy = p_user_id
     FROM jsonb_to_record(p_city::jsonb) AS json(
-        "CityName"                 varchar(50),
-        "StateProvinceID"          integer,
-        "LatestRecordedPopulation" bigint
+        CityName varchar(50),
+        StateProvinceID integer,
+        LatestRecordedPopulation bigint
     )
     WHERE CityID = p_city_id;
 END;
