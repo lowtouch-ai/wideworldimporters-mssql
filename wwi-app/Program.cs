@@ -1,24 +1,37 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
+using Npgsql;
 
-namespace App
-{
-    public class Program
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(o =>
     {
-        public static void Main(string[] args)
-        {
-            var host = new WebHostBuilder()
-                .UseKestrel()
-                .UseContentRoot(Directory.GetCurrentDirectory())
-                .UseIISIntegration()
-                .UseStartup<Startup>()
-                .Build();
+        o.LoginPath = "/Index";
+        o.AccessDeniedPath = "/Index";
+    });
 
-            host.Run();
-        }
-    }
-}
+var connectionString = builder.Configuration.GetConnectionString("WWI")!;
+builder.Services.AddNpgsqlDataSource(connectionString);
+
+builder.Services.AddAuthorization();
+builder.Services.AddControllersWithViews();
+
+var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+    app.UseDeveloperExceptionPage();
+else
+    app.UseExceptionHandler("/Error");
+
+app.UseStaticFiles();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllerRoute("FrontEnd", "{action}", new { controller = "FrontEnd", action = "Index" });
+app.MapControllerRoute("Api", "{controller}/{action}");
+app.MapControllerRoute("odata-single", "OData/{action}({id})", new { controller = "OData" });
+
+app.Run();
