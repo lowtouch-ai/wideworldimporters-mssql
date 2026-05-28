@@ -1,107 +1,112 @@
-﻿using System.Threading.Tasks;
+using System.Linq;
+using System.Threading.Tasks;
+using Dapper;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Belgrade.SqlClient;
-using MsSql.RestApi;
+using Npgsql;
 
 namespace wwi_app.Controllers
 {
     public class TableController : Controller
     {
-        IQueryPipe sqlQuery = null;
+        private readonly NpgsqlDataSource _dataSource;
 
-        public TableController(IQueryPipe sqlQueryService)
+        public TableController(NpgsqlDataSource dataSource)
         {
-            this.sqlQuery = sqlQueryService;
+            this._dataSource = dataSource;
         }
 
-		
-        private static readonly TableSpec salesorders = new TableSpec("WebApi","SalesOrders", "OrderDate,CustomerPurchaseOrderNumber,CustomerName,ExpectedDeliveryDate,PhoneNumber,SalesPerson,OrderID");
+        private async Task StreamTable(string viewName, string cols)
+        {
+            var colNames = cols.Split(',').Select(c => c.Trim()).ToArray();
+            var colListSql = string.Join(",", colNames.Select(c => $"{c.ToLowerInvariant()} AS \"{c}\""));
+
+            var draw   = Request.Query["draw"].FirstOrDefault();
+            var start  = int.TryParse(Request.Query["start"].FirstOrDefault(),  out var s) ? s : 0;
+            var length = int.TryParse(Request.Query["length"].FirstOrDefault(), out var l) ? l : 10;
+            var search = Request.Query["search[value]"].FirstOrDefault() ?? "";
+
+            await using var conn = await _dataSource.OpenConnectionAsync();
+
+            var totalCount    = await conn.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM {viewName}");
+            long filteredCount;
+            string dataJson;
+
+            if (string.IsNullOrWhiteSpace(search))
+            {
+                filteredCount = totalCount;
+                dataJson = await conn.ExecuteScalarAsync<string>(
+                    $"SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (SELECT {colListSql} FROM {viewName} LIMIT @length OFFSET @start) t",
+                    new { length, start });
+            }
+            else
+            {
+                var whereParts = colNames.Select(c => $"{c.ToLowerInvariant()}::text ILIKE @search");
+                var where = $"WHERE {string.Join(" OR ", whereParts)}";
+                var p = new { search = $"%{search}%", length, start };
+                filteredCount = await conn.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM {viewName} {where}", p);
+                dataJson = await conn.ExecuteScalarAsync<string>(
+                    $"SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (SELECT {colListSql} FROM {viewName} {where} LIMIT @length OFFSET @start) t", p);
+            }
+
+            Response.ContentType = "application/json";
+            await Response.WriteAsync(
+                $"{{\"draw\":{draw ?? "0"},\"recordsTotal\":{totalCount},\"recordsFiltered\":{filteredCount},\"data\":{dataJson ?? "[]"}}}");
+        }
+
         public async Task SalesOrders()
         {
-            await this
-				.Table(salesorders)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.sales_orders", "OrderDate,CustomerPurchaseOrderNumber,CustomerName,ExpectedDeliveryDate,PhoneNumber,SalesPerson,OrderID");
         }
-				
-        private static readonly TableSpec purchaseorders = new TableSpec("WebApi","PurchaseOrders", "OrderDate,SupplierReference,ExpectedDeliveryDate,ContactName,ContactPhone,IsOrderFinalized,PurchaseOrderID");
+
         public async Task PurchaseOrders()
         {
-            await this
-				.Table(purchaseorders)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.purchase_orders", "OrderDate,SupplierReference,ExpectedDeliveryDate,ContactName,ContactPhone,IsOrderFinalized,PurchaseOrderID");
         }
-				
-        private static readonly TableSpec invoices = new TableSpec("WebApi","Invoices", "InvoiceDate,CustomerPurchaseOrderNumber,CustomerName,SalesPersonName,ContactName,ContactPhone,SalesPersonEmail,InvoiceID");
+
         public async Task Invoices()
         {
-            await this
-				.Table(invoices)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.invoices", "InvoiceDate,CustomerPurchaseOrderNumber,CustomerName,SalesPersonName,ContactName,ContactPhone,SalesPersonEmail,InvoiceID");
         }
-				
-        private static readonly TableSpec customertransactions = new TableSpec("WebApi","CustomerTransactions", "TransactionDate,TransactionAmount,IsFinalized,CustomerName,TransactionTypeName,PaymentMethodName,InvoiceDate,CustomerTransactionID");
+
         public async Task CustomerTransactions()
         {
-            await this
-				.Table(customertransactions)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.customer_transactions", "TransactionDate,TransactionAmount,IsFinalized,CustomerName,TransactionTypeName,PaymentMethodName,InvoiceDate,CustomerTransactionID");
         }
-		
-        private static readonly TableSpec suppliertransactions = new TableSpec("WebApi","SupplierTransactions", "TransactionDate,TransactionAmount,IsFinalized,SupplierName,TransactionTypeName,PaymentMethodName,SupplierTransactionID");
+
         public async Task SupplierTransactions()
         {
-            await this
-				.Table(suppliertransactions)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.supplier_transactions", "TransactionDate,TransactionAmount,IsFinalized,SupplierName,TransactionTypeName,PaymentMethodName,SupplierTransactionID");
         }
-		
-        private static readonly TableSpec customers = new TableSpec("WebApi","Customers", "CustomerName,CustomerCategoryName,PhoneNumber,FaxNumber,BuyingGroupName,CustomerID");
+
         public async Task Customers()
         {
-            await this
-				.Table(customers)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.customers", "CustomerName,CustomerCategoryName,PhoneNumber,FaxNumber,BuyingGroupName,CustomerID");
         }
-		
-        private static readonly TableSpec suppliers = new TableSpec("WebApi","Suppliers", "SupplierName,SupplierCategoryName,PhoneNumber,FaxNumber,PrimaryContact,SupplierID");
+
         public async Task Suppliers()
         {
-            await this
-				.Table(suppliers)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.suppliers", "SupplierName,SupplierCategoryName,PhoneNumber,FaxNumber,PrimaryContact,SupplierID");
         }
-		
-        private static readonly TableSpec countries = new TableSpec("WebApi","Countries", "FormalName,Subregion,Region,Continent,LatestRecordedPopulation,CountryID");
+
         public async Task Countries()
         {
-            await this
-				.Table(countries)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.countries", "FormalName,Subregion,Region,Continent,LatestRecordedPopulation,CountryID");
         }
-		
-        private static readonly TableSpec cities = new TableSpec("WebApi","Cities", "CityName,LatestRecordedPopulation,StateProvinceName,CityID");
+
         public async Task Cities()
         {
-            await this
-				.Table(cities)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.cities", "CityName,LatestRecordedPopulation,CityID");
         }
-		
-        private static readonly TableSpec stateprovinces = new TableSpec("WebApi","StateProvinces", "StateProvinceName,StateProvinceCode,SalesTerritory,LatestRecordedPopulation,CountryName,StateProvinceID");
+
         public async Task StateProvinces()
         {
-            await this
-				.Table(stateprovinces)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.state_provinces", "StateProvinceName,StateProvinceCode,SalesTerritory,LatestRecordedPopulation,StateProvinceID");
         }
-		
-        private static readonly TableSpec stockitems = new TableSpec("WebApi","StockItems", "StockItemName,SupplierName,UnitPrice,TaxRate,RecommendedRetailPrice,StockItemID");
+
         public async Task StockItems()
         {
-            await this
-				.Table(stockitems)
-				.Process(this.sqlQuery);
+            await StreamTable("webapi.stock_items", "StockItemName,SupplierName,UnitPrice,TaxRate,RecommendedRetailPrice,StockItemID");
         }
-																		    }
+    }
 }
-

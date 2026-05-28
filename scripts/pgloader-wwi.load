@@ -1,0 +1,13 @@
+LOAD DATABASE
+  FROM mssql://sa:Sp1d3rman!@172.20.0.3:1433/WideWorldImporters
+  INTO postgresql://postgres:postgres@172.19.0.5:5432/postgres
+
+WITH include no drop, create no tables, create no indexes, reset no sequences,
+     workers = 4, concurrency = 1,
+     identifier case = lowercase
+
+ALTER SCHEMA 'Application' RENAME TO 'application'
+ALTER SCHEMA 'Purchasing'  RENAME TO 'purchasing'
+ALTER SCHEMA 'Sales'       RENAME TO 'sales'
+ALTER SCHEMA 'Warehouse'   RENAME TO 'warehouse'
+;

@@ -1,0 +1,7 @@
+
+# Local environment overrides
+.env
+
+# MSSQL export files (large, generated locally — copy to server manually)
+export/sql/
+scripts/__pycache__/

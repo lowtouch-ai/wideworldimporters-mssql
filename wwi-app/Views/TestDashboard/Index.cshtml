@@ -1,0 +1,992 @@
+@model IEnumerable<wwi_app.Services.TestCaseSummary>
+@{
+    ViewData["Title"] = "Test Dashboard";
+    var testList = Model?.ToList() ?? new List<wwi_app.Services.TestCaseSummary>();
+}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+        integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt"
+        crossorigin="anonymous"></script>
+
+@Html.AntiForgeryToken()
+
+<style>
+:root {
+    --bg:      #f0f4f8;
+    --surface: #fff;
+    --hero-a:  #0f172a;
+    --hero-b:  #1e293b;
+    --accent:  #6366f1;
+    --accent2: #8b5cf6;
+    --pass:    #10b981;
+    --fail:    #ef4444;
+    --warn:    #f59e0b;
+    --muted:   #94a3b8;
+    --border:  #e2e8f0;
+    --text:    #1e293b;
+    --r:       14px;
+    --shadow:  0 2px 16px rgba(0,0,0,.07);
+}
+
+.td-wrap { margin-top: 62px; background: var(--bg); min-height: calc(100vh - 62px); padding-bottom: 48px; }
+
+/* ── Hero ── */
+.td-hero {
+    background: linear-gradient(135deg, var(--hero-a) 0%, var(--hero-b) 100%);
+    border-radius: 0 0 24px 24px;
+    padding: 26px 32px 22px; color: #fff; position: relative; overflow: hidden;
+}
+.td-hero::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(ellipse at 75% 40%, rgba(99,102,241,.22) 0%, transparent 55%);
+    pointer-events:none;
+}
+.hero-title { font-size:24px; font-weight:800; letter-spacing:-.3px; display:flex; align-items:center; gap:10px; }
+.hero-dot { width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px rgba(99,102,241,.3); flex-shrink:0; }
+
+/* ── Run button ── */
+#btn-run {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    border:none; border-radius:50px; padding:12px 28px;
+    font-size:14px; font-weight:700; letter-spacing:.4px; color:#fff;
+    position:relative; overflow:hidden;
+    box-shadow:0 4px 18px rgba(99,102,241,.5);
+    transition:transform .2s, box-shadow .2s; cursor:pointer; white-space:nowrap;
+}
+#btn-run::after {
+    content:''; position:absolute; top:0; left:-120%; width:55%; height:100%;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.32),transparent);
+    transform:skewX(-18deg); animation:shimmer 2.4s infinite;
+}
+@@keyframes shimmer { 0%{left:-120%} 100%{left:160%} }
+#btn-run:hover:not(:disabled) { transform:translateY(-3px); box-shadow:0 8px 28px rgba(99,102,241,.7); }
+#btn-run:disabled { opacity:.6; cursor:not-allowed; }
+#btn-run:disabled::after { animation:none; }
+
+/* ── Status badge ── */
+.td-badge {
+    display:inline-flex; align-items:center; gap:6px; padding:5px 13px;
+    border-radius:50px; font-size:11px; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
+    background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.18);
+}
+.td-badge.run  { background:rgba(99,102,241,.3);  border-color:var(--accent);  color:#a5b4fc; }
+.td-badge.done { background:rgba(16,185,129,.2);   border-color:var(--pass);    color:#6ee7b7; }
+.td-badge.fail { background:rgba(239,68,68,.2);    border-color:var(--fail);    color:#fca5a5; }
+.spin { animation:spin 1s linear infinite; display:inline-block; }
+@@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ── Metric cards ── */
+.td-metrics { display:flex; gap:12px; margin-top:18px; flex-wrap:wrap; }
+.td-metric {
+    flex:1; min-width:100px;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.11);
+    border-radius:12px; padding:13px 16px; backdrop-filter:blur(6px);
+}
+.td-mnum { font-size:34px; font-weight:800; line-height:1; transition:color .3s; }
+.td-mnum.c-pass  { color:#6ee7b7; }
+.td-mnum.c-fail  { color:#fca5a5; }
+.td-mnum.c-idle  { color:#cbd5e1; }
+.td-mlbl { font-size:11px; text-transform:uppercase; letter-spacing:.7px; color:rgba(255,255,255,.4); margin-top:3px; }
+
+/* ── Progress ── */
+.td-prog-wrap { flex:2.5; min-width:200px; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.11); border-radius:12px; padding:13px 16px; }
+.td-prog-track { background:rgba(255,255,255,.12); border-radius:99px; height:8px; overflow:hidden; margin-top:6px; }
+.td-prog-fill {
+    height:100%; border-radius:99px; min-width:0%;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    transition:width .5s cubic-bezier(.4,0,.2,1);
+}
+.td-prog-fill.live::after {
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);
+    animation:sweep 1.4s linear infinite;
+}
+.td-prog-fill.live { position:relative; }
+@@keyframes sweep { from{transform:translateX(-100%)} to{transform:translateX(300%)} }
+.td-prog-fill.c-pass { background:linear-gradient(90deg,#059669,#10b981); }
+.td-prog-fill.c-fail { background:linear-gradient(90deg,#dc2626,#ef4444); }
+.td-prog-lbl { font-size:11px; color:rgba(255,255,255,.38); margin-top:5px; display:flex; justify-content:space-between; font-variant-numeric:tabular-nums; }
+
+/* ── Cards ── */
+.td-card { background:var(--surface); border-radius:var(--r); border:1px solid var(--border); box-shadow:var(--shadow); overflow:hidden; }
+.td-card-hd {
+    padding:13px 18px; border-bottom:1px solid var(--border);
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted);
+    display:flex; align-items:center; gap:7px;
+}
+.td-card-bd { padding:14px 18px; }
+
+/* ── Charts grid ── */
+.td-charts-grid { display:grid; grid-template-columns:280px 1fr 1fr; grid-template-rows:auto auto; gap:14px; margin-bottom:14px; }
+.chart-donut { grid-row:1/3; }
+.chart-canvas { position:relative; height:200px; }
+.chart-canvas-sm { position:relative; height:185px; }
+
+/* ── History ── */
+.hist-tbl { width:100%; border-collapse:collapse; font-size:12px; }
+.hist-tbl th { padding:8px 13px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); border-bottom:1px solid var(--border); }
+.hist-tbl td { padding:9px 13px; border-bottom:1px solid #f1f5f9; }
+.hist-tbl tr:last-child td { border-bottom:none; }
+.hist-tbl tr:hover td { background:#fafbfc; }
+.h-pass { background:#f0fdf4; } .h-fail { background:#fff5f5; }
+.pill { display:inline-block; padding:2px 9px; border-radius:99px; font-size:11px; font-weight:700; }
+.pill-p { background:#dcfce7; color:#166534; } .pill-f { background:#fee2e2; color:#991b1b; }
+.mini-track { width:72px; background:#e2e8f0; border-radius:99px; height:5px; display:inline-block; vertical-align:middle; overflow:hidden; }
+.mini-fill  { height:5px; border-radius:99px; }
+
+/* ── Filters ── */
+.td-filters { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+.td-filters select, .td-filters input {
+    height:34px; border-radius:8px; border:1px solid var(--border);
+    padding:0 11px; font-size:12px; color:var(--text); background:var(--surface); outline:none;
+    transition:border-color .2s, box-shadow .2s;
+}
+.td-filters select:focus, .td-filters input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(99,102,241,.13); }
+.td-filters input { flex:1; min-width:140px; }
+#btn-copy { display:none; height:34px; padding:0 14px; border-radius:8px; border:1px solid var(--border); background:transparent; font-size:11px; font-weight:600; color:var(--muted); cursor:pointer; transition:all .2s; margin-left:auto; }
+#btn-copy:hover { border-color:var(--fail); color:var(--fail); }
+
+/* ── Pagination ── */
+.td-pagination {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 4px 2px; flex-wrap:wrap; gap:8px;
+}
+.td-pagination-info { font-size:12px; color:var(--muted); }
+.td-pagination-info b { color:var(--text); }
+.td-pagination-controls { display:flex; align-items:center; gap:4px; }
+.pg-btn {
+    min-width:32px; height:32px; padding:0 8px; border-radius:8px;
+    border:1px solid var(--border); background:var(--surface); color:var(--text);
+    font-size:12px; font-weight:600; cursor:pointer; transition:all .15s;
+    display:inline-flex; align-items:center; justify-content:center;
+}
+.pg-btn:hover:not(:disabled):not(.pg-active) { background:#f1f5f9; border-color:#cbd5e1; }
+.pg-btn:disabled { opacity:.38; cursor:not-allowed; }
+.pg-btn.pg-active { background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 2px 8px rgba(99,102,241,.35); }
+.pg-ellipsis { padding:0 4px; color:var(--muted); font-size:13px; line-height:32px; }
+.pg-size-select {
+    height:32px; border-radius:8px; border:1px solid var(--border); padding:0 10px;
+    font-size:12px; color:var(--text); background:var(--surface); outline:none; cursor:pointer;
+    transition:border-color .2s;
+}
+.pg-size-select:focus { border-color:var(--accent); }
+
+/* ── Table ── */
+.td-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.td-tbl th {
+    padding:10px 14px; font-size:10px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.6px; color:var(--muted); border-bottom:2px solid var(--border);
+    cursor:pointer; user-select:none; background:#fafbfc; white-space:nowrap;
+}
+.td-tbl th:hover { background:#f1f5f9; }
+.si-wrap { display:inline-flex; flex-direction:column; gap:1px; margin-left:4px; vertical-align:middle; }
+.si { width:0; height:0; border-left:3px solid transparent; border-right:3px solid transparent; opacity:.25; }
+.si-u { border-bottom:4px solid var(--muted); } .si-d { border-top:4px solid var(--muted); }
+th.sort-asc  .si-u { opacity:1; border-bottom-color:var(--accent); }
+th.sort-desc .si-d { opacity:1; border-top-color:var(--accent); }
+.td-tbl td { padding:0; border-bottom:1px solid #f1f5f9; transition:background .12s; }
+.td-tbl tr:hover td { background:#f8fafc; }
+.td-tbl tr.tr-fail td { background:#fff8f8 !important; }
+.td-tbl tr.tr-fail:hover td { background:#fff0f0 !important; }
+
+/* ── Test cell ── */
+.test-cell { padding:9px 14px; }
+.test-label { font-weight:600; color:var(--text); font-size:13px; }
+.test-scenario { font-size:11px; color:var(--muted); margin-top:1px; }
+.test-expected {
+    display:inline-block; margin-top:4px; padding:1px 8px; border-radius:99px;
+    font-size:10px; font-weight:700; letter-spacing:.3px; background:#f1f5f9; color:#64748b;
+}
+.test-expected.exp-pass { background:#dcfce7; color:#15803d; }
+.test-expected.exp-fail { background:#fee2e2; color:#b91c1c; }
+
+/* ── Outcome badge ── */
+.ob { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:700; letter-spacing:.3px; }
+.ob-pend { background:#f1f5f9; color:#64748b; }
+.ob-pass { background:#dcfce7; color:#166534; }
+.ob-fail { background:#fee2e2; color:#991b1b; }
+.ob-skip { background:#fef3c7; color:#92400e; }
+.ob-dot  { width:5px; height:5px; border-radius:50%; }
+.ob-pend .ob-dot { background:#94a3b8; } .ob-pass .ob-dot { background:#10b981; }
+.ob-fail .ob-dot { background:#ef4444; } .ob-skip .ob-dot { background:#f59e0b; }
+
+/* ── Duration ── */
+.dur { font-size:12px; color:var(--muted); font-weight:500; font-variant-numeric:tabular-nums; padding:9px 14px; }
+.dur.slow { color:#dc2626; } .dur.med { color:#d97706; }
+
+/* ── Error expand ── */
+.err-row td { padding:0 !important; }
+.err-box {
+    display:none; background:#fff5f5; border-left:3px solid var(--fail);
+    padding:11px 18px; font-family:Menlo,Monaco,Consolas,monospace;
+    font-size:11px; white-space:pre-wrap; color:#991b1b; line-height:1.6;
+}
+.err-banner { display:none; background:#fff5f5; border:1px solid #fecaca; border-radius:10px; padding:11px 15px; color:#991b1b; font-size:12px; margin-bottom:13px; }
+</style>
+
+<div class="td-wrap">
+
+<!-- ── Hero ──────────────────────────────────────────────── -->
+<div class="td-hero">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+            <div class="hero-title"><span class="hero-dot"></span>Test Dashboard</div>
+            <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span id="status-badge" class="td-badge">
+                    <span class="glyphicon glyphicon-minus" style="font-size:9px"></span> IDLE
+                </span>
+                <span style="font-size:12px;color:rgba(255,255,255,.3)">
+                    Elapsed: <span id="elapsed" style="font-weight:700;color:rgba(255,255,255,.6);font-variant-numeric:tabular-nums">—</span>
+                </span>
+                <span id="run-id-lbl" style="font-size:11px;color:rgba(255,255,255,.22)"></span>
+            </div>
+        </div>
+        <button id="btn-run" type="button">
+            <span id="btn-icon" class="glyphicon glyphicon-play" style="margin-right:7px"></span><span id="btn-txt">Run Tests</span>
+        </button>
+    </div>
+
+    <div class="td-metrics">
+        <div class="td-metric">
+            <div id="m-pass" class="td-mnum c-idle">0</div>
+            <div class="td-mlbl">Passed</div>
+        </div>
+        <div class="td-metric">
+            <div id="m-fail" class="td-mnum c-idle">0</div>
+            <div class="td-mlbl">Failed</div>
+        </div>
+        <div class="td-metric">
+            <div id="m-pend" class="td-mnum c-idle">@testList.Count</div>
+            <div class="td-mlbl">Pending</div>
+        </div>
+        <div class="td-prog-wrap">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.4)">Progress</div>
+            <div class="td-prog-track" style="position:relative">
+                <div id="prog" class="td-prog-fill" style="width:0%"></div>
+            </div>
+            <div class="td-prog-lbl">
+                <span id="prog-done">0 / @testList.Count done</span>
+                <span id="prog-pct">0%</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Content ───────────────────────────────────────────── -->
+<div style="padding:20px 28px 0">
+
+    <div id="err-banner" class="err-banner"></div>
+
+    <!-- Charts 3-column grid: donut spans 2 rows, bar + trend + class -->
+    <div class="td-charts-grid">
+
+        <!-- Donut (spans 2 rows) -->
+        <div class="td-card chart-donut">
+            <div class="td-card-hd"><span class="glyphicon glyphicon-stats"></span> Pass / Fail</div>
+            <div class="td-card-bd">
+                <div class="chart-canvas"><canvas id="c-donut"></canvas></div>
+                <div id="donut-legend" style="display:flex;justify-content:center;gap:16px;margin-top:8px;font-size:12px;color:var(--muted)">
+                    <span><span style="color:#10b981">●</span> Passed: <b id="leg-p">0</b></span>
+                    <span><span style="color:#ef4444">●</span> Failed: <b id="leg-f">0</b></span>
+                    <span><span style="color:#e2e8f0">●</span> Pending: <b id="leg-n">@testList.Count</b></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slowest Tests -->
+        <div class="td-card">
+            <div class="td-card-hd"><span class="glyphicon glyphicon-hourglass"></span> Slowest Tests — Top 10</div>
+            <div class="td-card-bd" style="padding:10px 14px">
+                <div class="chart-canvas-sm"><canvas id="c-bar"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Pass Rate Trend (run history) -->
+        <div class="td-card">
+            <div class="td-card-hd"><span class="glyphicon glyphicon-signal"></span> Pass Rate Trend</div>
+            <div class="td-card-bd" style="padding:10px 14px">
+                <div class="chart-canvas-sm"><canvas id="c-trend"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Results by Class -->
+        <div class="td-card">
+            <div class="td-card-hd"><span class="glyphicon glyphicon-th-list"></span> Results by Class</div>
+            <div class="td-card-bd" style="padding:10px 14px">
+                <div class="chart-canvas-sm"><canvas id="c-class"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Outcome Timeline -->
+        <div class="td-card">
+            <div class="td-card-hd"><span class="glyphicon glyphicon-time"></span> Outcome Timeline</div>
+            <div class="td-card-bd" style="padding:10px 14px">
+                <div class="chart-canvas-sm"><canvas id="c-timeline"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Run History -->
+    <div class="td-card" style="margin-bottom:14px">
+        <div class="td-card-hd" id="hist-toggle" style="cursor:pointer;justify-content:space-between">
+            <span style="display:flex;align-items:center;gap:8px">
+                <span class="glyphicon glyphicon-list-alt"></span> Run History
+                <span id="hist-cnt" style="background:#f1f5f9;padding:1px 8px;border-radius:99px;font-size:10px"></span>
+            </span>
+            <span id="hist-chev" class="glyphicon glyphicon-chevron-down" style="font-size:11px"></span>
+        </div>
+        <div id="hist-body" style="display:none">
+            <table class="hist-tbl">
+                <thead><tr><th>#</th><th>Time</th><th>Passed</th><th>Failed</th><th>Total</th><th>Duration</th><th>Pass Rate</th></tr></thead>
+                <tbody id="hist-tbody">
+                    <tr><td colspan="7" style="padding:16px;text-align:center;color:var(--muted)">No runs recorded yet.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Filters + Table -->
+    <div class="td-card">
+        <div class="td-card-bd">
+            <div class="td-filters">
+                <select id="f-outcome">
+                    <option value="">All outcomes</option>
+                    <option value="Passed">Passed</option>
+                    <option value="Failed">Failed</option>
+                    <option value="Pending">Pending</option>
+                </select>
+                <select id="f-class">
+                    <option value="">All classes</option>
+                    @foreach (var cls in testList.Select(t => t.ClassName).Distinct().OrderBy(c => c))
+                    {
+                        <option value="@cls">@cls</option>
+                    }
+                </select>
+                <input type="text" id="f-search" placeholder="🔍  Search…" />
+                <select id="pg-size" class="pg-size-select" title="Rows per page">
+                    <option value="10">10 / page</option>
+                    <option value="25" selected>25 / page</option>
+                    <option value="50">50 / page</option>
+                    <option value="100">100 / page</option>
+                    <option value="0">All</option>
+                </select>
+                <button id="btn-copy"><span class="glyphicon glyphicon-copy"></span> Copy failed</button>
+            </div>
+
+            <table class="td-tbl">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-col="method" style="width:45%">What's Tested<span class="si-wrap"><span class="si si-u"></span><span class="si si-d"></span></span></th>
+                        <th class="sortable" data-col="class"  style="width:20%">Class<span class="si-wrap"><span class="si si-u"></span><span class="si si-d"></span></span></th>
+                        <th class="sortable" data-col="status" style="width:15%">Outcome<span class="si-wrap"><span class="si si-u"></span><span class="si si-d"></span></span></th>
+                        <th class="sortable" data-col="duration" style="width:10%">Duration<span class="si-wrap"><span class="si si-u"></span><span class="si si-d"></span></span></th>
+                    </tr>
+                </thead>
+                <tbody id="test-tbody">
+                    @foreach (var t in testList)
+                    {
+                        var key    = t.ClassName + "." + t.MethodName;
+                        var safeId = System.Text.RegularExpressions.Regex.Replace(key, @"[^a-zA-Z0-9]", "_");
+                        <tr data-key="@key" data-class="@t.ClassName" data-outcome="Pending" data-duration="0">
+                            <td class="test-cell">
+                                <div class="test-label" data-method="@t.MethodName"></div>
+                                <div class="test-scenario"></div>
+                                <div><span class="test-expected">Expected: <span class="exp-text"></span></span></div>
+                            </td>
+                            <td class="test-cell" style="color:var(--muted)">
+                                <span class="class-label" data-class="@t.ClassName"></span>
+                            </td>
+                            <td class="test-cell">
+                                <span class="ob ob-pend"><span class="ob-dot"></span>Pending</span>
+                            </td>
+                            <td class="dur">—</td>
+                        </tr>
+                        <tr class="err-row" id="er-@safeId" style="display:none">
+                            <td colspan="4"><div class="err-box" id="eb-@safeId"></div></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="td-pagination">
+                <div class="td-pagination-info" id="pg-info">Showing <b id="pg-from">1</b>–<b id="pg-to">25</b> of <b id="pg-total">0</b> tests</div>
+                <div class="td-pagination-controls" id="pg-controls"></div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /content -->
+</div><!-- /wrap -->
+
+<script>
+(function () {
+'use strict';
+var TOTAL = @testList.Count;
+var HIST_KEY = 'wwi-test-history';
+var MAX_HIST = 10;
+var pollInterval = null, timerHandle = null, startTime = null, activeRunId = null;
+
+// ── Name humaniser ─────────────────────────────────────────────────────────
+function pascalToWords(s) {
+    return s.replace(/([A-Z][a-z]+|[A-Z]+(?=[A-Z]|$)|\d+)/g, ' $1').replace(/\s+/g, ' ').trim();
+}
+function humanise(methodName) {
+    var parts = methodName.split('_').map(function(p){ return p.trim(); }).filter(Boolean);
+    if (parts.length < 2) return { label: pascalToWords(methodName), scenario: '', expected: '' };
+    var expected = pascalToWords(parts[parts.length - 1]);
+    var label    = parts.slice(0, Math.max(1, parts.length - 1)).map(pascalToWords).join(' — ');
+    var scenario = parts.length > 2 ? parts.slice(1, -1).map(pascalToWords).join(', ') : '';
+    return { label: parts[0] ? pascalToWords(parts[0]) : label, scenario: scenario, expected: expected };
+}
+function humaniseClass(cls) {
+    return cls.replace(/Tests?$/, '').replace(/Integration$/, '').trim()
+              .replace(/([A-Z])/g, ' $1').trim();
+}
+
+// ── Populate static labels on load ────────────────────────────────────────
+document.querySelectorAll('#test-tbody tr[data-key]').forEach(function(row) {
+    var methodName = row.querySelector('.test-label').getAttribute('data-method');
+    var className  = row.querySelector('.class-label').getAttribute('data-class');
+    var h = humanise(methodName);
+    row.querySelector('.test-label').textContent   = h.label;
+    row.querySelector('.test-scenario').textContent = h.scenario;
+    row.querySelector('.exp-text').textContent      = h.expected;
+    row.querySelector('.class-label').textContent   = humaniseClass(className);
+});
+
+// ── Chart.js instances ─────────────────────────────────────────────────────
+var chartDefaults = { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } } };
+
+var cDonut = new Chart(document.getElementById('c-donut'), {
+    type: 'doughnut',
+    data: { labels: ['Passed','Failed','Pending'],
+            datasets: [{ data:[0,0,TOTAL], backgroundColor:['#10b981','#ef4444','#e2e8f0'],
+                         borderWidth:0, hoverOffset:5 }] },
+    options: { responsive:true, maintainAspectRatio:true, cutout:'70%',
+               plugins:{ legend:{display:false},
+                         tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+c.parsed;}}} } }
+});
+
+var cBar = new Chart(document.getElementById('c-bar'), {
+    type: 'bar',
+    data: { labels:[], datasets:[{ label:'ms', data:[],
+        backgroundColor: function(ctx){ var v=ctx.parsed?ctx.parsed.x:0;
+            return v>2000?'#ef4444':v>500?'#f59e0b':'#6366f1'; },
+        borderRadius:4, borderSkipped:false }] },
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
+               plugins:{legend:{display:false}},
+               scales:{ x:{beginAtZero:true, grid:{color:'#f1f5f9'},
+                            ticks:{color:'#94a3b8',font:{size:10}},
+                            title:{display:true,text:'ms',color:'#94a3b8',font:{size:10}}},
+                        y:{grid:{display:false},ticks:{color:'#64748b',font:{size:10}}} } }
+});
+
+var cTrend = new Chart(document.getElementById('c-trend'), {
+    type: 'line',
+    data: { labels:[], datasets:[{
+        label:'Pass Rate %', data:[], borderColor:'#6366f1', backgroundColor:'rgba(99,102,241,.1)',
+        fill:true, tension:.4, pointRadius:4, pointBackgroundColor:'#6366f1', borderWidth:2
+    }]},
+    options: { responsive:true, maintainAspectRatio:false,
+               plugins:{legend:{display:false},
+                        tooltip:{callbacks:{label:function(c){return ' '+c.parsed.y+'%';}}}},
+               scales:{ x:{grid:{display:false},ticks:{color:'#94a3b8',font:{size:10}}},
+                        y:{min:0,max:100,grid:{color:'#f1f5f9'},
+                           ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return v+'%';}}} } }
+});
+
+var cClass = new Chart(document.getElementById('c-class'), {
+    type: 'bar',
+    data: { labels:[], datasets:[
+        { label:'Passed', data:[], backgroundColor:'#10b981', borderRadius:3 },
+        { label:'Failed', data:[], backgroundColor:'#ef4444', borderRadius:3 }
+    ]},
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
+               plugins:{ legend:{ display:true, position:'bottom',
+                   labels:{boxWidth:10,font:{size:11},color:'#64748b'} } },
+               scales:{ x:{stacked:true,beginAtZero:true,grid:{color:'#f1f5f9'},
+                            ticks:{color:'#94a3b8',font:{size:10}}},
+                        y:{stacked:true,grid:{display:false},ticks:{color:'#64748b',font:{size:10}}} } }
+});
+
+var cTimeline = new Chart(document.getElementById('c-timeline'), {
+    type: 'scatter',
+    data: { datasets:[
+        { label:'Passed', data:[], backgroundColor:'rgba(16,185,129,.7)', pointRadius:5 },
+        { label:'Failed', data:[], backgroundColor:'rgba(239,68,68,.8)', pointRadius:6, pointStyle:'triangle' },
+        { label:'Skipped',data:[], backgroundColor:'rgba(245,158,11,.7)', pointRadius:5 }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+               plugins:{ legend:{ display:true, position:'bottom',
+                   labels:{boxWidth:10,font:{size:11},color:'#64748b'} },
+                   tooltip:{ callbacks:{ label:function(c){
+                       return ' '+c.raw.name+' ('+Math.round(c.raw.y)+'ms)';
+                   }}} },
+               scales:{ x:{title:{display:true,text:'Test #',color:'#94a3b8',font:{size:10}},
+                            grid:{color:'#f1f5f9'},ticks:{color:'#94a3b8',font:{size:10}}},
+                        y:{beginAtZero:true,title:{display:true,text:'Duration (ms)',color:'#94a3b8',font:{size:10}},
+                           grid:{color:'#f1f5f9'},ticks:{color:'#94a3b8',font:{size:10}}} } }
+});
+
+function updateCharts(passed, failed, pending, results) {
+    // Donut
+    cDonut.data.datasets[0].data = [passed, failed, pending];
+    cDonut.update('none');
+    document.getElementById('leg-p').textContent = passed;
+    document.getElementById('leg-f').textContent = failed;
+    document.getElementById('leg-n').textContent = pending;
+
+    if (!results || results.length === 0) return;
+
+    // Slowest bar
+    var sorted = results.filter(function(r){return r.durationMs>0;})
+        .sort(function(a,b){return b.durationMs-a.durationMs;}).slice(0,10);
+    cBar.data.labels = sorted.map(function(r){ return humanise(r.methodName).label; });
+    cBar.data.datasets[0].data = sorted.map(function(r){ return Math.round(r.durationMs); });
+    cBar.update('none');
+
+    // Class breakdown
+    var classMap = {};
+    results.forEach(function(r) {
+        if (!classMap[r.className]) classMap[r.className] = {p:0,f:0};
+        if (r.outcome==='Passed') classMap[r.className].p++;
+        else if (r.outcome==='Failed') classMap[r.className].f++;
+    });
+    var classes = Object.keys(classMap);
+    cClass.data.labels = classes.map(humaniseClass);
+    cClass.data.datasets[0].data = classes.map(function(c){return classMap[c].p;});
+    cClass.data.datasets[1].data = classes.map(function(c){return classMap[c].f;});
+    cClass.update('none');
+
+    // Timeline scatter
+    var passP=[], failP=[], skipP=[];
+    results.forEach(function(r, i) {
+        var pt = { x: i+1, y: Math.round(r.durationMs||0), name: humanise(r.methodName).label };
+        if (r.outcome==='Passed')      passP.push(pt);
+        else if (r.outcome==='Failed') failP.push(pt);
+        else                           skipP.push(pt);
+    });
+    cTimeline.data.datasets[0].data = passP;
+    cTimeline.data.datasets[1].data = failP;
+    cTimeline.data.datasets[2].data = skipP;
+    cTimeline.update('none');
+}
+
+function refreshTrendChart() {
+    var history = loadHistory();
+    if (!history.length) return;
+    var trimmed = history.slice().reverse(); // oldest first
+    cTrend.data.labels = trimmed.map(function(_, i){ return 'Run '+(i+1); });
+    cTrend.data.datasets[0].data = trimmed.map(function(r){
+        return r.total > 0 ? Math.round(r.passed/r.total*100) : 0;
+    });
+    cTrend.update('none');
+}
+
+// ── Run history ────────────────────────────────────────────────────────────
+function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HIST_KEY)||'[]'); } catch(e){ return []; }
+}
+function saveHistory(entry) {
+    var h=loadHistory(); h.unshift(entry);
+    if (h.length>MAX_HIST) h.length=MAX_HIST;
+    localStorage.setItem(HIST_KEY, JSON.stringify(h));
+    renderHistory(h); refreshTrendChart();
+}
+function renderHistory(history) {
+    var tbody=document.getElementById('hist-tbody');
+    document.getElementById('hist-cnt').textContent = history.length || '';
+    while(tbody.firstChild) tbody.removeChild(tbody.firstChild);
+    if (!history.length) {
+        var tr=tbody.insertRow(); var td=tr.insertCell();
+        td.colSpan=7; td.style.cssText='padding:16px;text-align:center;color:var(--muted)';
+        td.textContent='No runs recorded yet.'; return;
+    }
+    history.forEach(function(r,i) {
+        var rate=r.total>0?Math.round(r.passed/r.total*100):0;
+        var dur=r.durationMs>0?(r.durationMs>=60000
+            ?Math.floor(r.durationMs/60000)+'m '+Math.round((r.durationMs%60000)/1000)+'s'
+            :Math.round(r.durationMs/1000)+'s'):'—';
+        var t=new Date(r.timestamp);
+        var tr=tbody.insertRow();
+        tr.className=r.failed>0?'h-fail':r.passed>0?'h-pass':'';
+
+        var c0=tr.insertCell(); c0.textContent=String(i+1); c0.style.color='var(--muted)';
+        var c1=tr.insertCell(); c1.textContent=t.toLocaleDateString()+' '+t.toLocaleTimeString();
+        c1.title='Run '+(r.runId||'').substring(0,8); c1.style.fontSize='11px';
+
+        var c2=tr.insertCell(); var p2=document.createElement('span');
+        p2.className='pill pill-p'; p2.textContent='✓ '+r.passed; c2.appendChild(p2);
+
+        var c3=tr.insertCell();
+        if (r.failed>0){var p3=document.createElement('span');p3.className='pill pill-f';p3.textContent='✗ '+r.failed;c3.appendChild(p3);}
+        else{c3.textContent='—';c3.style.color='var(--muted)';}
+
+        var c4=tr.insertCell(); c4.textContent=String(r.total);
+        var c5=tr.insertCell(); c5.textContent=dur; c5.style.color='var(--muted)';
+
+        var c6=tr.insertCell();
+        var wrap=document.createElement('div');
+        wrap.style.cssText='display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:'+(r.failed>0?'#ef4444':'#10b981');
+        wrap.textContent=rate+'%';
+        var bw=document.createElement('div'); bw.className='mini-track';
+        var bf=document.createElement('div'); bf.className='mini-fill';
+        bf.style.cssText='width:'+rate+'%;background:'+(r.failed>0?'#ef4444':'#10b981');
+        bw.appendChild(bf); wrap.appendChild(bw); c6.appendChild(wrap);
+    });
+}
+renderHistory(loadHistory());
+refreshTrendChart();
+
+document.getElementById('hist-toggle').addEventListener('click', function(){
+    var b=document.getElementById('hist-body'), open=b.style.display!=='none';
+    b.style.display=open?'none':'';
+    document.getElementById('hist-chev').className='glyphicon '+(open?'glyphicon-chevron-down':'glyphicon-chevron-up');
+});
+
+// ── Status helpers ─────────────────────────────────────────────────────────
+function setStatus(s) {
+    var el=document.getElementById('status-badge');
+    el.className='td-badge';
+    if (s==='Running') {
+        el.className+=' run';
+        el.innerHTML='<span class="spin glyphicon glyphicon-refresh" style="font-size:9px"></span> RUNNING';
+    } else if (s==='Completed') {
+        el.className+=' done';
+        el.innerHTML='<span class="glyphicon glyphicon-ok" style="font-size:9px"></span> PASSED';
+    } else if (s==='Failed') {
+        el.className+=' fail';
+        el.innerHTML='<span class="glyphicon glyphicon-remove" style="font-size:9px"></span> FAILED';
+    } else {
+        el.innerHTML='<span class="glyphicon glyphicon-minus" style="font-size:9px"></span> IDLE';
+    }
+}
+function resetBtn() {
+    var btn=document.getElementById('btn-run');
+    btn.disabled=false;
+    document.getElementById('btn-icon').className='glyphicon glyphicon-play';
+    document.getElementById('btn-txt').textContent='Run Tests';
+}
+function setProgress(done, total, running, allPass, anyFail) {
+    var pct=total>0?Math.round(done/total*100):0;
+    var fill=document.getElementById('prog');
+    fill.style.width=Math.min(pct,100)+'%';
+    fill.className='td-prog-fill'+(running?' live':anyFail?' c-fail':allPass&&done>0?' c-pass':'');
+    document.getElementById('prog-done').textContent=done+' / '+total+' done';
+    document.getElementById('prog-pct').textContent=pct+'%';
+    document.getElementById('m-pass').textContent=allPass||anyFail?String(done-(anyFail?1:0)):String(0);
+}
+function setMetrics(passed,failed,pending) {
+    document.getElementById('m-pass').textContent=String(passed);
+    document.getElementById('m-fail').textContent=String(failed);
+    document.getElementById('m-pend').textContent=String(pending);
+    document.getElementById('m-pass').className='td-mnum '+(passed>0?'c-pass':'c-idle');
+    document.getElementById('m-fail').className='td-mnum '+(failed>0?'c-fail':'c-idle');
+    document.getElementById('m-pend').className='td-mnum c-idle';
+}
+
+function startTimer(){startTime=Date.now();timerHandle=setInterval(function(){
+    var ms=Date.now()-startTime,s=Math.floor(ms/1000),m=Math.floor(s/60);s=s%60;
+    document.getElementById('elapsed').textContent=(m>0?m+'m ':'')+s+'s';
+},500);}
+function stopTimer(){if(timerHandle){clearInterval(timerHandle);timerHandle=null;}}
+
+// ── Dashboard update ───────────────────────────────────────────────────────
+function updateDashboard(data) {
+    setStatus(data.status);
+    var s=data.summary||{};
+    var passed=s.passed||0, failed=s.failed||0, total=s.total||TOTAL;
+    var pending=Math.max(0, TOTAL-passed-failed);
+    var running=data.status==='Running';
+
+    setMetrics(passed, failed, pending);
+    var done=passed+failed;
+    var fill=document.getElementById('prog');
+    fill.style.width=TOTAL>0?Math.min(Math.round(done/TOTAL*100),100)+'%':'0%';
+    fill.className='td-prog-fill'+(running?' live':failed>0?' c-fail':passed>0&&done===TOTAL?' c-pass':'');
+    document.getElementById('prog-done').textContent=done+' / '+TOTAL+' done';
+    document.getElementById('prog-pct').textContent=TOTAL>0?Math.round(done/TOTAL*100)+'%':'0%';
+
+    if (data.runId) document.getElementById('run-id-lbl').textContent='Run #'+(data.runId||'').substring(0,8);
+
+    updateCharts(passed, failed, pending, data.results);
+
+    var hasFailed=false;
+    (data.results||[]).forEach(function(r) {
+        var key=r.className+'.'+r.methodName;
+        var row=document.querySelector('tr[data-key="'+CSS.escape(key)+'"]');
+        if (!row) return;
+        row.setAttribute('data-outcome', r.outcome);
+        row.setAttribute('data-duration', r.durationMs||0);
+
+        var badge=row.querySelector('.ob');
+        var dot='<span class="ob-dot"></span>';
+        if (r.outcome==='Passed')          { badge.className='ob ob-pass'; badge.innerHTML=dot+'Passed'; }
+        else if (r.outcome==='Failed')     { badge.className='ob ob-fail'; badge.innerHTML=dot+'Failed'; hasFailed=true; }
+        else if (r.outcome==='NotExecuted'){ badge.className='ob ob-skip'; badge.innerHTML=dot+'Skipped'; }
+        else                               { badge.className='ob ob-pend'; badge.innerHTML=dot+'Pending'; }
+
+        var exp=row.querySelector('.test-expected');
+        if (r.outcome==='Passed')      exp.className='test-expected exp-pass';
+        else if (r.outcome==='Failed') exp.className='test-expected exp-fail';
+        else                           exp.className='test-expected';
+
+        var dur=row.querySelector('.dur');
+        if (r.durationMs>0) {
+            var ms=Math.round(r.durationMs);
+            dur.textContent=ms+' ms';
+            dur.className='dur'+(ms>2000?' slow':ms>500?' med':'');
+        }
+
+        if (r.outcome==='Failed') {
+            row.classList.add('tr-fail');
+            var sid=key.replace(/[^a-zA-Z0-9]/g,'_');
+            var eb=document.getElementById('eb-'+sid);
+            if (eb&&r.errorMessage){ eb.textContent=r.errorMessage; eb.style.display='block'; }
+            var er=document.getElementById('er-'+sid);
+            if (er) er.style.display='';
+        } else {
+            row.classList.remove('tr-fail');
+        }
+    });
+
+    document.getElementById('btn-copy').style.display=hasFailed?'block':'none';
+    renderPage();
+
+    if (data.status==='Completed'||data.status==='Failed') {
+        stopPolling(); stopTimer(); resetBtn();
+        document.getElementById('prog').classList.remove('live');
+        saveHistory({ runId:data.runId, timestamp:Date.now(),
+            passed:passed, failed:failed, total:TOTAL,
+            durationMs:startTime?Date.now()-startTime:0 });
+    }
+}
+
+function stopPolling(){ if(pollInterval){clearInterval(pollInterval);pollInterval=null;} }
+function startPolling(){
+    pollInterval=setInterval(function(){
+        fetch('/TestDashboard/Status').then(function(r){return r.json();})
+        .then(function(data){
+            if(activeRunId&&data.runId&&data.runId!==activeRunId) return;
+            updateDashboard(data);
+        }).catch(function(){});
+    },1000);
+}
+
+// ── Run Tests button ───────────────────────────────────────────────────────
+document.getElementById('btn-run').addEventListener('click', function(){
+    stopPolling(); stopTimer();
+    document.getElementById('err-banner').style.display='none';
+    this.disabled=true;
+    document.getElementById('btn-icon').className='spin glyphicon glyphicon-refresh';
+    document.getElementById('btn-txt').textContent='Running…';
+    setStatus('Running'); startTimer();
+
+    // Reset all rows
+    document.querySelectorAll('#test-tbody tr[data-key]').forEach(function(row){
+        row.setAttribute('data-outcome','Pending');
+        row.setAttribute('data-duration','0');
+        row.classList.remove('tr-fail');
+        var badge=row.querySelector('.ob'); badge.className='ob ob-pend';
+        badge.innerHTML='<span class="ob-dot"></span>Pending';
+        var dur=row.querySelector('.dur'); dur.textContent='—'; dur.className='dur';
+        var exp=row.querySelector('.test-expected'); exp.className='test-expected';
+    });
+    document.querySelectorAll('.err-row').forEach(function(r){r.style.display='none';});
+    document.querySelectorAll('.err-box').forEach(function(d){d.textContent='';d.style.display='none';});
+
+    setMetrics(0,0,TOTAL);
+    var fill=document.getElementById('prog');
+    fill.style.width='0%'; fill.className='td-prog-fill live';
+    document.getElementById('prog-done').textContent='0 / '+TOTAL+' done';
+    document.getElementById('prog-pct').textContent='0%';
+    updateCharts(0,0,TOTAL,[]);
+
+    var csrf=(document.querySelector('input[name="__RequestVerificationToken"]')||{}).value||'';
+    fetch('/TestDashboard/Run',{method:'POST',headers:{'RequestVerificationToken':csrf}})
+    .then(function(r){
+        if(r.status===409){
+            resetBtn(); setStatus('Idle'); stopTimer();
+            showErr('A test run is already in progress.'); return;
+        }
+        if(!r.ok) return r.text().then(function(b){throw new Error('HTTP '+r.status+': '+b.substring(0,200));});
+        return r.json().then(function(data){activeRunId=data.runId||null; startPolling();});
+    })
+    .catch(function(err){
+        resetBtn(); setStatus('Idle'); stopTimer();
+        showErr('Could not start: '+((err&&err.message)?err.message:'Network error'));
+    });
+});
+
+function showErr(msg){ var el=document.getElementById('err-banner'); el.textContent=msg; el.style.display=''; }
+
+// ── Error expand ───────────────────────────────────────────────────────────
+document.getElementById('test-tbody').addEventListener('click', function(e){
+    var row=e.target.closest('tr[data-key]');
+    if(!row||row.getAttribute('data-outcome')!=='Failed') return;
+    var sid=row.getAttribute('data-key').replace(/[^a-zA-Z0-9]/g,'_');
+    var er=document.getElementById('er-'+sid), eb=document.getElementById('eb-'+sid);
+    if(!er||!eb) return;
+    var open=eb.style.display==='block';
+    eb.style.display=open?'none':'block';
+    if(er.style.display==='none'&&!open) er.style.display='';
+});
+
+// ── Copy failed ────────────────────────────────────────────────────────────
+document.getElementById('btn-copy').addEventListener('click', function(){
+    var names=[];
+    document.querySelectorAll('#test-tbody tr[data-outcome="Failed"]').forEach(function(r){
+        names.push(r.getAttribute('data-key'));
+    });
+    navigator.clipboard.writeText(names.join('\n'));
+});
+
+// ── Sort ───────────────────────────────────────────────────────────────────
+var sort={col:null,dir:1};
+function sortTable(col){
+    sort.dir=sort.col===col?sort.dir*-1:1; sort.col=col;
+    var tbody=document.getElementById('test-tbody');
+    var rows=Array.from(tbody.querySelectorAll('tr[data-key]'));
+    rows.sort(function(a,b){
+        if(col==='duration') return (parseFloat(a.getAttribute('data-duration')||0)-parseFloat(b.getAttribute('data-duration')||0))*sort.dir;
+        var m={method:'data-key',class:'data-class',status:'data-outcome'};
+        return (a.getAttribute(m[col])||'').localeCompare(b.getAttribute(m[col])||'')*sort.dir;
+    });
+    rows.forEach(function(row){
+        var sid=row.getAttribute('data-key').replace(/[^a-zA-Z0-9]/g,'_');
+        var er=document.getElementById('er-'+sid);
+        tbody.appendChild(row); if(er) tbody.appendChild(er);
+    });
+    document.querySelectorAll('th.sortable').forEach(function(th){th.classList.remove('sort-asc','sort-desc');});
+    var active=document.querySelector('th.sortable[data-col="'+col+'"]');
+    if(active) active.classList.add(sort.dir===1?'sort-asc':'sort-desc');
+    currentPage=1; renderPage();
+}
+document.querySelectorAll('th.sortable').forEach(function(th){
+    th.addEventListener('click',function(){sortTable(th.getAttribute('data-col'));});
+});
+
+// ── Pagination ─────────────────────────────────────────────────────────────
+var currentPage = 1;
+
+function getPageSize() {
+    return parseInt(document.getElementById('pg-size').value, 10) || 0;
+}
+
+// Returns all data rows (tr[data-key]) that pass the current filters, in DOM order.
+function getVisibleDataRows() {
+    var ov=document.getElementById('f-outcome').value;
+    var cv=document.getElementById('f-class').value;
+    var sv=document.getElementById('f-search').value.toLowerCase();
+    return Array.from(document.querySelectorAll('#test-tbody tr[data-key]')).filter(function(row){
+        var ro=row.getAttribute('data-outcome')||'Pending';
+        var rc=row.getAttribute('data-class')||'';
+        var rk=(row.getAttribute('data-key')||'').toLowerCase();
+        var label=(row.querySelector('.test-label')||{}).textContent||'';
+        return (!ov||ro===ov)&&(!cv||rc===cv)&&(!sv||rk.includes(sv)||label.toLowerCase().includes(sv));
+    });
+}
+
+function renderPage() {
+    var pageSize = getPageSize();
+    var allVisible = getVisibleDataRows();
+    var total = allVisible.length;
+    var totalPages = pageSize > 0 ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    var from = pageSize > 0 ? (currentPage - 1) * pageSize : 0;
+    var to   = pageSize > 0 ? Math.min(from + pageSize, total) : total;
+
+    // Show/hide every data row and its paired error row
+    document.querySelectorAll('#test-tbody tr[data-key]').forEach(function(row, domIdx) {
+        var sid = row.getAttribute('data-key').replace(/[^a-zA-Z0-9]/g,'_');
+        var er  = document.getElementById('er-'+sid);
+        var inFilter = allVisible.indexOf(row) !== -1;
+        var inPage   = pageSize === 0 || (allVisible.indexOf(row) >= from && allVisible.indexOf(row) < to);
+        var show = inFilter && inPage;
+        row.style.display = show ? '' : 'none';
+        if (er) er.style.display = show && er.querySelector('.err-box').style.display === 'block' ? '' : 'none';
+    });
+
+    // Update info text
+    document.getElementById('pg-from').textContent  = total === 0 ? 0 : from + 1;
+    document.getElementById('pg-to').textContent    = to;
+    document.getElementById('pg-total').textContent = total;
+
+    // Render page buttons
+    renderPaginationControls(currentPage, totalPages);
+}
+
+function renderPaginationControls(page, totalPages) {
+    var container = document.getElementById('pg-controls');
+    while (container.firstChild) container.removeChild(container.firstChild);
+    if (totalPages <= 1) return;
+
+    function makeBtn(label, targetPage, isActive, disabled, isIcon) {
+        var btn = document.createElement('button');
+        btn.className = 'pg-btn' + (isActive ? ' pg-active' : '');
+        btn.disabled  = !!disabled;
+        if (isIcon) {
+            var ic = document.createElement('span');
+            ic.className = 'glyphicon ' + label;
+            btn.appendChild(ic);
+        } else {
+            btn.textContent = String(label);
+        }
+        if (!disabled && !isActive) {
+            btn.addEventListener('click', function(){ currentPage = targetPage; renderPage(); });
+        }
+        return btn;
+    }
+
+    function makeEllipsis() {
+        var s = document.createElement('span'); s.className = 'pg-ellipsis'; s.textContent = '…'; return s;
+    }
+
+    container.appendChild(makeBtn('glyphicon-step-backward', 1,      false, page===1, true));
+    container.appendChild(makeBtn('glyphicon-chevron-left',  page-1, false, page===1, true));
+
+    // Smart windowed page numbers: always show first, last, current ±2
+    var pages = [];
+    for (var i=1; i<=totalPages; i++) {
+        if (i===1 || i===totalPages || (i>=page-2 && i<=page+2)) pages.push(i);
+    }
+    var prev = 0;
+    pages.forEach(function(p) {
+        if (prev && p - prev > 1) container.appendChild(makeEllipsis());
+        container.appendChild(makeBtn(p, p, p===page, false, false));
+        prev = p;
+    });
+
+    container.appendChild(makeBtn('glyphicon-chevron-right', page+1,      false, page===totalPages, true));
+    container.appendChild(makeBtn('glyphicon-step-forward',  totalPages,  false, page===totalPages, true));
+}
+
+// ── Filters — delegate to renderPage ──────────────────────────────────────
+function applyFilters() { currentPage = 1; renderPage(); }
+
+['f-outcome','f-class','f-search'].forEach(function(id){
+    var el=document.getElementById(id);
+    el.addEventListener('input',applyFilters); el.addEventListener('change',applyFilters);
+});
+document.getElementById('pg-size').addEventListener('change', function(){ currentPage=1; renderPage(); });
+
+// Initial render
+renderPage();
+
+// ── Sync on load ───────────────────────────────────────────────────────────
+fetch('/TestDashboard/Status').then(function(r){return r.json();})
+.then(function(data){
+    if(data.status==='Running'){
+        activeRunId=data.runId||null;
+        document.getElementById('btn-run').disabled=true;
+        document.getElementById('btn-icon').className='spin glyphicon glyphicon-refresh';
+        document.getElementById('btn-txt').textContent='Running…';
+        setStatus('Running'); startTimer(); startPolling();
+    } else if(data.status==='Completed'||data.status==='Failed'){
+        updateDashboard(data);
+    }
+}).catch(function(){});
+})();
+</script>
