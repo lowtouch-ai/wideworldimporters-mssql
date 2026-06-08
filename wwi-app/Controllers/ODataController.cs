@@ -506,9 +506,9 @@ namespace wwi_app.Controllers
         public async Task Cities(int? id)
         {
             if (id == null)
-                await StreamJson("SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (SELECT CityID,CityName,StateProvinceID,LatestRecordedPopulation FROM webapi.cities) t");
+                await StreamJson("SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (SELECT CityID,CityName,StateProvinceID,StateProvinceName,LatestRecordedPopulation FROM webapi.cities) t");
             else
-                await StreamJson("SELECT row_to_json(t)::text FROM (SELECT CityID,CityName,StateProvinceID,LatestRecordedPopulation FROM webapi.cities WHERE CityID=@id) t", new { id });
+                await StreamJson("SELECT row_to_json(t)::text FROM (SELECT CityID,CityName,StateProvinceID,StateProvinceName,LatestRecordedPopulation FROM webapi.cities WHERE CityID=@id) t", new { id });
         }
 
         [Authorize]
@@ -539,9 +539,9 @@ namespace wwi_app.Controllers
         public async Task StateProvinces(int? id)
         {
             if (id == null)
-                await StreamJson("SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (SELECT StateProvinceID,StateProvinceCode,StateProvinceName,CountryID,SalesTerritory,LatestRecordedPopulation FROM webapi.state_provinces) t");
+                await StreamJson("SELECT COALESCE(json_agg(row_to_json(t))::text,'[]') FROM (SELECT StateProvinceID,StateProvinceCode,StateProvinceName,CountryID,CountryName,SalesTerritory,LatestRecordedPopulation FROM webapi.state_provinces) t");
             else
-                await StreamJson("SELECT row_to_json(t)::text FROM (SELECT StateProvinceID,StateProvinceCode,StateProvinceName,CountryID,SalesTerritory,LatestRecordedPopulation FROM webapi.state_provinces WHERE StateProvinceID=@id) t", new { id });
+                await StreamJson("SELECT row_to_json(t)::text FROM (SELECT StateProvinceID,StateProvinceCode,StateProvinceName,CountryID,CountryName,SalesTerritory,LatestRecordedPopulation FROM webapi.state_provinces WHERE StateProvinceID=@id) t", new { id });
         }
 
         [Authorize]
