@@ -47,6 +47,7 @@
 
     $table.on("click", "button.delete",
         e => {
+            if (!confirm('Delete this record? This cannot be undone.')) return;
             var id = e.target.attributes["data-id"].value;
             o('StockGroups')
                 .find(id).remove()
