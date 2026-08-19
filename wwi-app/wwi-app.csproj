@@ -20,6 +20,11 @@
          CVE-2024-0056 (GHSA-98g6-xh36-x2p7, cleartext transmission bypass) and
          CVE-2022-41064 (GHSA-8g2p-5pqh-5jmc); 4.5.1 resolved otherwise. -->
     <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
+    <!-- Pin transitive NuGet.Packaging/NuGet.Protocol (via Microsoft.VisualStudio.Web.CodeGeneration.Design)
+         past GHSA-g4vj-cjjj-v7hg (package identity/version validation gap); 6.12.1 resolved otherwise,
+         fixed at 6.12.5 in the same minor line. -->
+    <PackageReference Include="NuGet.Packaging" Version="6.12.5" />
+    <PackageReference Include="NuGet.Protocol" Version="6.12.5" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="wwwroot\OData.tt">
