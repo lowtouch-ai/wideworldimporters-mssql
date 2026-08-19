@@ -4,6 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
+using Microsoft.Extensions.Logging.Debug;
 
 namespace App
 {
@@ -15,6 +18,7 @@ namespace App
                 .UseKestrel()
                 .UseContentRoot(Directory.GetCurrentDirectory())
                 .UseIISIntegration()
+                .ConfigureLogging(logging => logging.AddConsole().AddDebug())
                 .UseStartup<Startup>()
                 .Build();
 
