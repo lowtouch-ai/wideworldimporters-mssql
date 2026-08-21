@@ -7,6 +7,5 @@ obj/project.assets.json
 *.sln
 *.log
 Properties/PublishProfiles/*
-*.Development.json
 *.lock.json
 *.ide
