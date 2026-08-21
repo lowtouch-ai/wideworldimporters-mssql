@@ -55,6 +55,7 @@
 
     $table.on("click", "button.delete",
         e => {
+            if (!confirm('Delete this record? This cannot be undone.')) return;
             try {
                 var id = e.target.attributes["data-id"].value;
                 o('Countries')
