@@ -19,7 +19,7 @@
                     <div class="media-body">
                         <h4 class="media-heading bind-StockItemName"></h4>
                         <span class="bind-MarketingComments"></span> Price: <span class="bind-UnitPrice"></span>$ Tax: <span class="bind-TaxRate"></span>$
-                        Color: <span class="bind-ColorName"></span>  Size: <span class="bind-Size"></span> <span class="bind-Brand"></span>
+                        Color: <span class="bind-ColorName"></span> <span class="size-info">Size: <span class="bind-Size"></span></span> <span class="bind-Brand"></span>
                     </div>
                  </div>
             </template>
@@ -87,23 +87,22 @@
 
         function refresh(data) {
             $(".product-list").html($("#tmpl-product-item").html());
-            $(".product-tags").html($("#tmpl-product-tags").html());
             $(".product-list>.product-item").view(data.value);
-            if (data.tags.length >= 1) {
+            $(".size-info").filter(function() {
+                return !$(this).find(".bind-Size").text().trim();
+            }).hide();
+
+            var tags = data.tags || [];
+            if (tags.length >= 1) {
+                $(".product-tags").html($("#tmpl-product-tags").html());
                 $(".product-tags-l").show();
                 $("#category-filter-h").show();
-                $(".product-tags-l>li").view(data.tags.slice(0, data.tags.length / 2));
-            } else {
-                $("#category-filter-h").hide();
-                $(".product-tags-l").hide();
+                $(".product-tags-l>li").view(tags.slice(0, Math.floor(tags.length / 2)));
+                if (tags.length >= 2) {
+                    $(".product-tags-r").show();
+                    $(".product-tags-r>li").view(tags.slice(Math.floor(tags.length / 2), tags.length));
+                }
             }
-            if (data.tags.length >= 2) {
-                $(".product-tags-r").show();
-                $(".product-tags-r>li").view(data.tags.slice(data.tags.length / 2 + 1, data.tags.length));
-            } else {
-                $(".product-tags-r").hide();
-            }
-
         }
 
         var params = {};
